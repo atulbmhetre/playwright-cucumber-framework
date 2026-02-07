@@ -19,11 +19,16 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Install Playwright Browsers
-        # This installs the actual browser engines on the Linux server
+      - name: Update OS and Install Playwright
         run: |
+          # 1. Update the Linux package manager to avoid Code 100
+          sudo apt-get update
+          
+          # 2. Run the Playwright installer through Maven
           mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
-          # If the above fails, this backup command ensures the OS libraries are there
+          
+          # 3. If Maven fails to install some OS libraries, this forces them
+          # (npx is pre-installed on ubuntu-latest)
           npx playwright install-deps
 
       - name: Execute Tests
