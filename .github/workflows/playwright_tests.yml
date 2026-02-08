@@ -1,16 +1,19 @@
-name: Playwright Regression
+name: Playwright Regression Suite
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # Allows you to run manually from the GitHub UI
+  workflow_dispatch:
 
 jobs:
   test:
+    # Using 22.04 as it is the most stable for Playwright 1.40 dependencies
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -26,23 +29,47 @@ jobs:
           mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
 
       - name: Execute Tests
-        # Our "Unlimited" command with the 5 Core Variables
-        run: mvn test -Denv=qa -Dbrowser=chromium -Dheadless=true -Ddataproviderthreadcount=3 -Dretry=1
+        # No 'continue-on-error' here. If a test fails, this step turns RED.
+        # We use xvfb-run in case any part of the framework expects a display
+        run: |
+          xvfb-run --auto-servernum -- mvn test \
+            -Denv=qa \
+            -Dbrowser=chromium \
+            -Dheadless=true \
+            -Ddataproviderthreadcount=3 \
+            -Dretry=1 \
+            -Dcucumber.filter.tags="@Login"
+
+      - name: Get Allure History
+        # We always run this to ensure the 'Retries' tab works in the next report
+        if: always()
         continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
 
       - name: Generate Allure Report
-        uses: simple-elf/allure-report-action@master
         if: always()
+        uses: simple-elf/allure-report-action@master
         with:
           allure_results: target/allure-results
           gh_pages: gh-pages
           allure_report: allure-report
           allure_history: allure-history
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy Report to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: allure-history
+
+      - name: Upload Traces & Videos as Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-forensics
+          path: target/allure-results/*.zip
+          retention-days: 7
