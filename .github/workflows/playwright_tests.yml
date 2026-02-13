@@ -1,4 +1,5 @@
 name: Playwright Regression Suite
+
 on:
   push:
     branches: [ main ]
@@ -11,11 +12,12 @@ jobs:
       contents: write
 
     steps:
-      # 1️⃣ Checkout code
+
+      # 1️⃣ Checkout
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup JDK
+      # 2️⃣ Setup Java
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -23,20 +25,29 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # 3️⃣ Install Playwright Browsers & Deps
-      - name: Install Playwright Browsers & Deps
+      # 3️⃣ Install Playwright
+      - name: Install Playwright Browsers
         run: |
           sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
-          mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
+          mvn exec:java -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
 
-      # 4️⃣ Prepare Allure History BEFORE tests
+      # 4️⃣ Install Allure CLI (official binary method - stable)
+      - name: Install Allure CLI
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+          tar -zxvf allure-2.27.0.tgz
+          sudo mv allure-2.27.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+          allure --version
+
+      # 5️⃣ Prepare history BEFORE tests
       - name: Prepare Allure History
         run: |
           mkdir -p target/allure-results/history
           cp -r allure-history-backup/history/* target/allure-results/history/ || true
 
-      # 5️⃣ Execute Tests
+      # 6️⃣ Execute Tests
       - name: Execute Tests
         run: |
           xvfb-run --auto-servernum -- mvn test \
@@ -45,22 +56,17 @@ jobs:
             -Dheadless=true \
             -Ddataproviderthreadcount=3 \
             -Dretry=1 \
-            -Dcucumber.filter.tags="@Login" || true  # don't fail workflow if tests fail
+            -Dcucumber.filter.tags="@Login" || true
 
-      # 6️⃣ Merge previous history backup AFTER tests (to include new results)
-      - name: Merge Allure History Backup
-        run: |
-          mkdir -p target/allure-results/history
-          cp -r allure-history-backup/history/* target/allure-results/history/ || true
-
-      # 7️⃣ Generate Allure Report using CLI (always runs, even if tests failed)
+      # 7️⃣ Generate Report
       - name: Generate Allure Report
         run: |
-          set +e
-          allure generate target/allure-results -o target/site/allure --clean
-          set -e
+          mkdir -p target/site/allure
+          allure generate target/allure-results \
+            -o target/site/allure \
+            --clean || true
 
-      # 8️⃣ Deploy Allure Report to GitHub Pages
+      # 8️⃣ Deploy to GitHub Pages
       - name: Deploy Allure Report
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -68,17 +74,17 @@ jobs:
           publish_branch: gh-pages
           publish_dir: target/site/allure
 
-      # 9️⃣ Backup updated history and commit ONLY if there are real changes
-      - name: Commit Updated History Backup
+      # 9️⃣ Update History Backup (force add)
+      - name: Commit Updated History
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           mkdir -p allure-history-backup/history
           cp -r target/allure-results/history/* allure-history-backup/history/ || true
-          git add allure-history-backup/history
+          git add -f allure-history-backup/history
           if ! git diff --cached --quiet; then
             git commit -m "CI: Update Allure history backup [skip ci]"
             git push origin HEAD:main
           else
-            echo "No changes in history, skipping commit"
+            echo "No history changes"
           fi
