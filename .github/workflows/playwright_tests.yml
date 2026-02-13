@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
-          mvn exec:java -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
+          mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps"
 
       # 4️⃣ Install Allure CLI
       - name: Install Allure CLI
@@ -82,7 +82,18 @@ jobs:
             -o target/site/allure \
             --clean || true
 
-      # 9️⃣ Deploy to gh-pages (history auto-included)
+      # 9️⃣ Run Defect Age Report (Java)
+      - name: Defect Age Report
+        run: mvn exec:java -Dexec.mainClass="com.qa.opencart.utils.AllureDefectAge"
+
+      # 🔟 Upload Defect Age Report as artifact
+      - name: Upload Defect Age Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: defect-age-report
+          path: target/defect-age-report.txt
+
+      # 1️⃣1️⃣ Deploy Allure Report to gh-pages
       - name: Deploy Allure Report
         uses: peaceiris/actions-gh-pages@v3
         with:
