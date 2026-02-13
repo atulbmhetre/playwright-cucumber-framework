@@ -86,9 +86,9 @@ jobs:
       - name: Defect Age Report
         run: mvn exec:java -Dexec.mainClass="com.qa.opencart.utils.AllureDefectAge"
 
-      # 🔟 Upload Defect Age Report as artifact
+      # 🔟 Upload Defect Age Report (v4)
       - name: Upload Defect Age Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
           path: target/defect-age-report.txt
