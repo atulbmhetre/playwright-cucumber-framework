@@ -8,13 +8,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-22.04
-    permissions:
-      contents: write
 
     steps:
 
-      # 1️⃣ Checkout
-      - name: Checkout Code
+      # 1️⃣ Checkout main
+      - name: Checkout main
         uses: actions/checkout@v4
 
       # 2️⃣ Setup Java
@@ -25,14 +23,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # 3️⃣ Install Playwright
+      # 3️⃣ Install Playwright Browsers
       - name: Install Playwright Browsers
         run: |
           sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
           mvn exec:java -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
 
-      # 4️⃣ Install Allure CLI (official binary method - stable)
+      # 4️⃣ Install Allure CLI
       - name: Install Allure CLI
         run: |
           wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
@@ -41,13 +39,20 @@ jobs:
           sudo ln -s /opt/allure/bin/allure /usr/bin/allure
           allure --version
 
-      # 5️⃣ Prepare history BEFORE tests
-      - name: Prepare Allure History
+      # 5️⃣ Checkout gh-pages branch for history restore
+      - name: Checkout gh-pages for history
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      # 6️⃣ Restore history into results folder
+      - name: Restore Allure History
         run: |
           mkdir -p target/allure-results/history
-          cp -r allure-history-backup/history/* target/allure-results/history/ || true
+          cp -r gh-pages/history/* target/allure-results/history/ || true
 
-      # 6️⃣ Execute Tests
+      # 7️⃣ Execute Tests
       - name: Execute Tests
         run: |
           export ENV=qa
@@ -61,14 +66,15 @@ jobs:
             -Ddataproviderthreadcount=3 \
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
-          
+
+          # Write environment info for Allure
           echo "Browser=$BROWSER" >> target/allure-results/environment.properties
           echo "Environment=$ENV" >> target/allure-results/environment.properties
           echo "Headless=$HEADLESS" >> target/allure-results/environment.properties
           echo "CI=GitHub Actions" >> target/allure-results/environment.properties
           echo "OS=$(uname -s)" >> target/allure-results/environment.properties
 
-      # 7️⃣ Generate Report
+      # 8️⃣ Generate Allure Report
       - name: Generate Allure Report
         run: |
           mkdir -p target/site/allure
@@ -76,28 +82,10 @@ jobs:
             -o target/site/allure \
             --clean || true
 
-      # 8️⃣ Deploy to GitHub Pages
+      # 9️⃣ Deploy to gh-pages (history auto-included)
       - name: Deploy Allure Report
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: target/site/allure
-
-      # 9️⃣ Update History Backup (force add)
-      - name: Commit Updated History
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          mkdir -p allure-history-backup/history
-          cp -r target/site/allure/history/* allure-history-backup/history/ || true
-
-          git add -f allure-history-backup/history
-          if ! git diff --cached --quiet; then
-            git commit -m "CI: Update Allure history backup [skip ci]"
-            git push origin HEAD:main
-          else
-            echo "No history changes"
-          fi
-      
