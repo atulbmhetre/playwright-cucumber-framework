@@ -1,1 +1,1 @@
-[]
+[{"values":["chromium"],"name":"Browser"},{"values":["qa"],"name":"Environment"},{"values":["true"],"name":"Headless"},{"values":["GitHub Actions"],"name":"CI"},{"values":["Linux"],"name":"OS"}]
