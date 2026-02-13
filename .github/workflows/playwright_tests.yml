@@ -89,8 +89,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           mkdir -p allure-history-backup/history
-          cp -r target/allure-results/history/* allure-history-backup/history/ || true
+          cp -r target/site/allure/history/* allure-history-backup/history/ || true
+
           git add -f allure-history-backup/history
           if ! git diff --cached --quiet; then
             git commit -m "CI: Update Allure history backup [skip ci]"
@@ -98,3 +100,4 @@ jobs:
           else
             echo "No history changes"
           fi
+      
