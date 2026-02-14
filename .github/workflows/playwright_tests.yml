@@ -134,4 +134,4 @@ jobs:
       # 21️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
-          echo "Report URL: https://<your-org-or-user>.github.io/<repo-name>/report-${{ env.REPORT_TS }}"
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
