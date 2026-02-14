@@ -138,22 +138,22 @@ jobs:
       - name: Push Report to GitHub Pages
         run: git push -u origin gh-pages
 
-      # 20️⃣ Upload Allure results as artifact
-      - name: Upload Allure Results Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-results
-          path: target/allure-results
-
-#      # 21️⃣ Upload Test Output Artifact
-#      - name: Upload Test Output Artifact
-#        run: |
-#          echo "Listing contents of test-output before upload"
-#          ls -la test-output
-#      - uses: actions/upload-artifact@v4
+#      # 20️⃣ Upload Allure results as artifact
+#      - name: Upload Allure Results Artifact
+#        uses: actions/upload-artifact@v4
 #        with:
-#          name: Failed_locators
-#          path: ./test-output/failedLocators_*.json
+#          name: allure-results
+#          path: target/allure-results
+
+      # 21️⃣ Upload Test Output Artifact
+      - name: Upload Test Output Artifact
+        run: |
+          echo "Listing contents of test-output before upload"
+          ls -la test-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Failed_locators
+          path: ./test-output/failedLocators_*.json
 
       # 22️⃣ Display GitHub Pages report URL
       - name: Display Report URL
