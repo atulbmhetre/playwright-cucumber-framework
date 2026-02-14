@@ -39,8 +39,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y unzip curl
-          # Download a specific version of Allure CLI (replace 2.27.1 with latest if needed)
-          curl -Lo allure.zip https://github.com/allure-framework/allure2/releases/download/2.27.1/allure-2.27.1.zip
+
+          ALLURE_VERSION="2.35.1"
+          DOWNLOAD_URL="https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.zip"
+
+          echo "Downloading Allure CLI from $DOWNLOAD_URL"
+          curl -fL "$DOWNLOAD_URL" -o allure.zip
+
+          # Check file validity
+          if ! file allure.zip | grep -q "Zip archive data"; then
+            echo "ERROR: allure.zip is not a valid zip file!"
+            echo "Contents of the download:"
+            cat allure.zip
+            exit 1
+          fi
+
           unzip allure.zip -d allure
           sudo mv allure/bin/allure /usr/local/bin/
           allure --version
