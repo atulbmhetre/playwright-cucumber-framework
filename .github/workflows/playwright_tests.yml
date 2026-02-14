@@ -97,17 +97,17 @@ jobs:
         id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 14️⃣ Create report folder for current run
-      - name: Create Report Folder
-        run: mkdir -p gh-pages/report-${{ env.REPORT_TS }}
+      # 14️⃣ Create temporary report folder for current run
+      - name: Create Temporary Report Folder
+        run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 15️⃣ Generate Allure HTML
+      # 15️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
-        run: allure generate target/allure-results -o gh-pages/report-${{ env.REPORT_TS }} --clean
+        run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
 
       # 16️⃣ List generated report contents
       - name: List Generated Report
-        run: ls -l gh-pages/report-${{ env.REPORT_TS }}
+        run: ls -l temp-report-${{ env.REPORT_TS }}
 
       # 17️⃣ Configure Git for push
       - name: Configure Git
@@ -118,31 +118,25 @@ jobs:
       # 18️⃣ Commit Allure HTML to gh-pages
       - name: Commit Allure Report
         run: |
-          git add gh-pages/report-${{ env.REPORT_TS }}
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
-
-      # 19️⃣ Push Allure HTML to gh-pages
-      - name: Push Report to GitHub Pages
-        run: |
-          # Configure git
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-          # Check if gh-pages exists locally
+          git fetch origin
+          # Switch to gh-pages branch, create if missing
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
+            git rm -rf .
           fi
 
-          # Add report folder
-          git add gh-pages/report-${{ env.REPORT_TS }}
+          # Copy temp report into gh-pages folder
+          mkdir -p report-${{ env.REPORT_TS }}
+          cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
 
-          # Commit changes
+          git add report-${{ env.REPORT_TS }}
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
-          # Push
-          git push -u origin gh-pages
+      # 19️⃣ Push Allure HTML to gh-pages
+      - name: Push Report to GitHub Pages
+        run: git push -u origin gh-pages
 
       # 20️⃣ Upload Allure results as artifact
       - name: Upload Allure Results Artifact
