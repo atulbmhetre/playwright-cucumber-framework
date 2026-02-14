@@ -83,8 +83,8 @@ jobs:
       # 1️⃣1️⃣ Generate Defect Age Report
       - name: Generate Defect Age Report
         run: |
-          mvn compile
-          java -cp target/classes com.samtech.qa.testutilities.AllureDefectAge
+          mvn test-compile
+          java -cp target/test-classes com.samtech.qa.testutilities.AllureDefectAge
 
       # 1️⃣2️⃣ Backup history folder with timestamp
       - name: Backup Allure History
