@@ -6,7 +6,7 @@ on:
       - main
   workflow_dispatch:
 
-# Required permissions for GitHub Pages deployment
+# 🔑 Permissions required to make the "Publish" link appear under Settings > Pages
 permissions:
   contents: write
   pages: write
@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ Display Java version
+      # 2️⃣ Display Java version (debugging)
       - name: Display Java Version
         run: java -version
 
@@ -46,6 +46,7 @@ jobs:
           tar -zxvf allure-2.27.0.tgz
           sudo mv allure-2.27.0 /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+          allure --version
 
       # 5️⃣ Prepare history folder
       - name: Prepare History Folder
@@ -54,7 +55,7 @@ jobs:
       # 6️⃣ Fetch existing history from gh-pages
       - name: Fetch Existing History from gh-pages
         run: |
-          git fetch origin gh-pages || true
+          git fetch origin gh-pages
           git checkout gh-pages -- history || echo "No history found"
 
       # 7️⃣ Merge existing history into current results
@@ -68,22 +69,29 @@ jobs:
       # 9️⃣ Install Node & Playwright
       - name: Install Node and Playwright Browsers
         run: |
+          curl -fsSL https://deb.nodesource.com | sudo -E bash -
+          sudo apt-get install -y nodejs
           npm install -g playwright
-          npx playwright install --with-deps
+          npx playwright install
 
       # 🔟 Run Maven tests
       - name: Run Test Suite
         run: |
           xvfb-run --auto-servernum -- mvn test \
-            -Denv=$ENV -Dbrowser=$BROWSER -Dheadless=$HEADLESS \
+            -Denv=$ENV \
+            -Dbrowser=$BROWSER \
+            -Dheadless=$HEADLESS \
+            -Ddataproviderthreadcount=3 \
+            -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
 
-      # 1️⃣1️⃣ Backup history folder
+      # 1️⃣1️⃣ Backup history folder with timestamp
       - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
       # 1️⃣2️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
@@ -91,13 +99,14 @@ jobs:
 
       # 1️⃣3️⃣ Set timestamp for report
       - name: Set Timestamp for Report
+        id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 1️⃣4️⃣ Create temporary report folder
+      # 1️⃣4️⃣ Create temporary report folder for current run
       - name: Create Temporary Report Folder
         run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣5️⃣ Generate Allure HTML
+      # 1️⃣5️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
         run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
 
@@ -121,16 +130,18 @@ jobs:
             git checkout --orphan gh-pages
             git rm -rf .
           fi
+
           mkdir -p report-${{ env.REPORT_TS }}
           cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
-          git add .
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes"
+
+          git add report-${{ env.REPORT_TS }}
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
       # 1️⃣9️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
-        run: git push origin gh-pages
+        run: git push -u origin gh-pages
 
-      # 2️⃣0️⃣ Prepare Failed Locators for Pages Hosting
+      # 2️⃣0️⃣ Prepare JSON for hosting
       - name: Prepare Failed Locators for Pages
         run: |
           mkdir -p public-artifacts
@@ -138,17 +149,17 @@ jobs:
           if [ -n "$FILE" ]; then
             cp "$FILE" public-artifacts/latest-failed-locator.json
           else
-            echo "No JSON found" > public-artifacts/no-file.txt
+            echo "No JSON found" > public-artifacts/status.txt
           fi
 
-      # 2️⃣1️⃣ Upload Pages Artifact (This enables the link in Settings)
+      # 2️⃣1️⃣ Upload Pages Artifact
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'public-artifacts/'
 
-  deploy-to-pages:
-    # 2️⃣2️⃣ Deploy to GitHub Pages (The final step to show the link)
+  # 2️⃣2️⃣ New Job to deploy and show the link in Settings
+  deploy:
     needs: run-tests-and-publish-allure
     runs-on: ubuntu-latest
     environment:
