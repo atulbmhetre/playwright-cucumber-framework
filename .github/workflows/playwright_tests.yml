@@ -161,7 +161,7 @@ jobs:
           
           if [ -n "$FILE" ]; then
             echo "Uploading $FILE"
-            echo "::set-output name=path::$FILE"
+            echo "path=$FILE" >> "$GITHUB_OUTPUT"
           else
             echo "No failedLocators JSON found. Skipping upload."
           fi
