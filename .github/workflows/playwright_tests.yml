@@ -1,83 +1,76 @@
-name: Playwright Regression Suite
+name: Playwright Cucumber Allure CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: ubuntu-22.04
+  run-tests-and-publish-allure:
+    runs-on: ubuntu-latest
+    env:
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64
+      ENV: qa
+      BROWSER: chromium
+      HEADLESS: true
 
     steps:
 
-      # 1️⃣ Checkout Main Branch
-      - name: Checkout Main Branch
+      # 1️⃣ Checkout the repository
+      - name: Checkout Repository Code
         uses: actions/checkout@v4
-
-      # 2️⃣ Setup Java JDK 21
-      - name: Setup Java JDK 21
-        uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
+          fetch-depth: 0
 
-      # 3️⃣ Verify Java Version
-      - name: Verify Java Installation
+      # 2️⃣ Display Java version (for debugging)
+      - name: Display Java Version
         run: java -version
 
-      # 4️⃣ Install Maven Dependencies
-      - name: Install Maven Dependencies
-        run: mvn clean install -DskipTests
-
-      # 5️⃣ Install Playwright Browsers
-      - name: Install Playwright Browsers with Dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install --with-deps"
-
-      # 6️⃣ Verify Playwright Installation
-      - name: Verify Playwright
-        run: mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="--version"
-
-      # 7️⃣ Install Allure CLI
-      - name: Download and Install Allure CLI
-        run: |
-          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
-          tar -zxvf allure-2.27.0.tgz
-          sudo mv allure-2.27.0 /opt/allure
-          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
-
-      # 8️⃣ Verify Allure Installation
-      - name: Check Allure Version
-        run: allure --version
-
-      # 9️⃣ Checkout gh-pages for Allure History
-      - name: Checkout gh-pages Branch for History
-        uses: actions/checkout@v4
+      # 3️⃣ Set up Java environment
+      - name: Setup Java 21
+        uses: actions/setup-java@v3
         with:
-          ref: gh-pages
-          path: gh-pages
+          distribution: temurin
+          java-version: 21
 
-      # 🔟 Restore Allure History
-      - name: Restore Allure History to Results
+      # 4️⃣ Install Allure CLI
+      - name: Install Allure CLI
         run: |
-          mkdir -p target/allure-results/history
-          cp -r gh-pages/history/* target/allure-results/history/ || true
+          sudo apt-add-repository ppa:qameta/allure -y
+          sudo apt-get update
+          sudo apt-get install allure -y
+          allure --version
 
-      # 1️⃣1️⃣ Set Environment Variables for Test Execution
-      - name: Set Test Environment Variables
-        run: |
-          echo "ENV=qa" >> $GITHUB_ENV
-          echo "BROWSER=chromium" >> $GITHUB_ENV
-          echo "HEADLESS=true" >> $GITHUB_ENV
+      # 5️⃣ Create folder for history
+      - name: Prepare History Folder
+        run: mkdir -p target/allure-results/history
 
-      # 1️⃣2️⃣ Run Tests with Maven & Xvfb
-      - name: Execute Regression Tests
+      # 6️⃣ Fetch existing history from gh-pages branch
+      - name: Fetch Existing History from gh-pages
         run: |
-          # Always generate results even if tests fail
+          git fetch origin gh-pages
+          git checkout gh-pages -- history || echo "No history found"
+
+      # 7️⃣ Copy existing history into current results
+      - name: Merge Existing History into Allure Results
+        run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
+
+      # 8️⃣ Display environment variables
+      - name: Display Environment Variables
+        run: env | grep -E 'ENV|BROWSER|HEADLESS'
+
+      # 9️⃣ Install Node and Playwright (if needed)
+      - name: Install Node and Playwright Browsers
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          npm install -g playwright
+          npx playwright install
+
+      # 🔟 Run Maven Tests
+      - name: Run Test Suite
+        run: |
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
@@ -86,60 +79,59 @@ jobs:
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
 
-      # 1️⃣3️⃣ Generate Environment Info for Allure
-      - name: Write Environment Info for Allure
+      # 11️⃣ Backup history folder with timestamp
+      - name: Backup Allure History
         run: |
-          mkdir -p target/allure-results
-          echo "Browser=$BROWSER" >> target/allure-results/environment.properties
-          echo "Env=$ENV" >> target/allure-results/environment.properties
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          mkdir -p allure-history-backup
+          cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 1️⃣4️⃣ Collect Allure Results
-      - name: Collect Allure Results
+      # 12️⃣ Clean previous allure report folder (optional)
+      - name: Clean Old Allure Reports
+        run: rm -rf gh-pages/report-*
+
+      # 13️⃣ Generate timestamp variable for report
+      - name: Set Timestamp for Report
+        id: timestamp
+        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+
+      # 14️⃣ Create report folder for current run
+      - name: Create Report Folder
+        run: mkdir -p gh-pages/report-$REPORT_TS
+
+      # 15️⃣ Generate Allure HTML Report
+      - name: Generate Allure HTML
+        run: allure generate target/allure-results -o gh-pages/report-$REPORT_TS --clean
+
+      # 16️⃣ List generated report contents
+      - name: List Generated Report
+        run: ls -l gh-pages/report-$REPORT_TS
+
+      # 17️⃣ Configure Git for push
+      - name: Configure Git
         run: |
-          mkdir -p artifacts/allure-results
-          cp -r target/allure-results/* artifacts/allure-results/
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
 
-      # 1️⃣5️⃣ Collect Test Output (Failed Locators, JSON, Logs)
-      - name: Collect Test Output
+      # 18️⃣ Commit Allure HTML to gh-pages
+      - name: Commit Allure Report
         run: |
-          mkdir -p artifacts/test-output
-          cp -r test-output/* artifacts/test-output/ || true
+          git add gh-pages/report-$REPORT_TS
+          git commit -m "Update Allure report $REPORT_TS" || echo "No changes to commit"
 
-      # 1️⃣6️⃣ Collect Defect Age CSV
-      - name: Collect Defect Age CSV
-        run: |
-          mkdir -p artifacts/defect-data
-          cp target/defect-age.csv artifacts/defect-data/ || true
+      # 19️⃣ Push Allure HTML to gh-pages
+      - name: Push Report to GitHub Pages
+        run: git push origin gh-pages
 
-      # 1️⃣7️⃣ Generate Allure HTML Report (No browser opening)
-      - name: Generate Allure HTML Report
-        run: |
-          allure generate artifacts/allure-results -o artifacts/allure-report --clean
-          echo "Allure report generated at artifacts/allure-report"
-
-      # 1️⃣8️⃣ Upload Artifacts for Later Download
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      # 20️⃣ Upload Allure results as workflow artifact
+      - name: Upload Allure Results Artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: test-artifacts
-          path: |
-            artifacts/allure-results
-            artifacts/allure-report
-            artifacts/test-output
-            artifacts/defect-data
+          name: allure-results
+          path: target/allure-results
 
-      # 1️⃣9️⃣ Update Allure History for Trends
-      - name: Copy Updated History from Latest Run
-        run: |
-          mkdir -p gh-pages/history
-          cp -r artifacts/allure-results/history/* gh-pages/history/ || true
-
-      # 2️⃣0️⃣ Commit & Push Allure History to gh-pages
-      - name: Commit and Push Allure History
-        run: |
-          cd gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add history/*
-          git commit -m "Update Allure history from latest run" || echo "No changes to commit"
-          git push origin gh-pages
+      # 21️⃣ Optional: Display GitHub Pages report URL
+      - name: Display Report URL
+        run:
+          echo "Report URL: https://<your-org-or-user>.github.io/<repo-name>/report-$REPORT_TS"
