@@ -1,0 +1,6 @@
+"Status","Start Time","Stop Time","Duration in ms","Parent Suite","Suite","Sub Suite","Test Class","Test Method","Name","Description"
+"broken","Sat Feb 14 09:45:29 UTC 2026","Sat Feb 14 09:48:12 UTC 2026","163135","","User Authentication","","Test 2 Successful login with admin credentials","","Test 2 Successful login with admin credentials",""
+"broken","Sat Feb 14 09:42:35 UTC 2026","Sat Feb 14 09:45:29 UTC 2026","174613","","User Authentication","","Successful login with admin credentials","","Successful login with admin credentials",""
+"broken","Sat Feb 14 09:42:35 UTC 2026","Sat Feb 14 09:45:30 UTC 2026","175113","","User Authentication","","Invalid login using direct feature data","","Invalid login using direct feature data",""
+"broken","Sat Feb 14 09:45:29 UTC 2026","Sat Feb 14 09:48:12 UTC 2026","162828","","User Authentication","","Test 3 Successful login with admin credentials","","Test 3 Successful login with admin credentials",""
+"broken","Sat Feb 14 09:42:35 UTC 2026","Sat Feb 14 09:45:29 UTC 2026","174339","","User Authentication","","Test 1 Successful login with admin credentials","","Test 1 Successful login with admin credentials",""
