@@ -104,11 +104,10 @@ public class AllureDefectAge {
         // Prepare output
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%-50s %-12s %-12s %-20s %-20s%n", "Test Name", "Runs Failed", "Age(Days)", "First Failed", "Last Failed"));
-        sb.append("=".repeat(120)).append("\n");
+        sb.append("Test Name,Runs Failed,Age(Days),First Failed,Last Failed\n");
 
         for (DefectReport d : defectReports) {
-            sb.append(String.format("%-50s %-12d %-12d %-20s %-20s%n",
+            sb.append(String.format("%s,%d,%d,%s,%s\n",
                     d.getName(),
                     d.getConsecutiveFailures(),
                     d.getAgeDays(),
