@@ -6,7 +6,7 @@ on:
       - main
   workflow_dispatch:
 
-# 🔑 Permissions required to make the "Publish" link appear under Settings > Pages
+# 🔑 Required to make the "Publish" link appear under Settings > Pages
 permissions:
   contents: write
   pages: write
@@ -22,6 +22,7 @@ jobs:
       HEADLESS: true
 
     steps:
+
       # 1️⃣ Checkout the repository
       - name: Checkout Repository Code
         uses: actions/checkout@v4
@@ -42,7 +43,7 @@ jobs:
       # 4️⃣ Install Allure CLI
       - name: Install Allure CLI
         run: |
-          wget https://github.com
+          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
           tar -zxvf allure-2.27.0.tgz
           sudo mv allure-2.27.0 /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/bin/allure
@@ -74,7 +75,7 @@ jobs:
           npm install -g playwright
           npx playwright install
 
-      # 🔟 Run Maven tests
+      # 10️⃣ Run Maven tests
       - name: Run Test Suite
         run: |
           xvfb-run --auto-servernum -- mvn test \
@@ -85,7 +86,7 @@ jobs:
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
 
-      # 1️⃣1️⃣ Backup history folder with timestamp
+      # 11️⃣ Backup history folder with timestamp
       - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -93,37 +94,38 @@ jobs:
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 1️⃣2️⃣ Clean previous Allure reports
+      # 12️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
         run: rm -rf gh-pages/report-*
 
-      # 1️⃣3️⃣ Set timestamp for report
+      # 13️⃣ Set timestamp for report (make it available to all steps)
       - name: Set Timestamp for Report
         id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 1️⃣4️⃣ Create temporary report folder for current run
+      # 14️⃣ Create temporary report folder for current run
       - name: Create Temporary Report Folder
         run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣5️⃣ Generate Allure HTML into temp folder
+      # 15️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
         run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
 
-      # 1️⃣6️⃣ List generated report contents
+      # 16️⃣ List generated report contents
       - name: List Generated Report
         run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣7️⃣ Configure Git for push
+      # 17️⃣ Configure Git for push
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      # 1️⃣8️⃣ Commit Allure HTML to gh-pages
+      # 18️⃣ Commit Allure HTML to gh-pages
       - name: Commit Allure Report
         run: |
           git fetch origin
+          # Switch to gh-pages branch, create if missing
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
@@ -131,34 +133,34 @@ jobs:
             git rm -rf .
           fi
 
+          # Copy temp report into gh-pages folder
           mkdir -p report-${{ env.REPORT_TS }}
           cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
 
           git add report-${{ env.REPORT_TS }}
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
-      # 1️⃣9️⃣ Push Allure HTML to gh-pages
+      # 19️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
         run: git push -u origin gh-pages
 
-      # 2️⃣0️⃣ Prepare JSON for hosting
-      - name: Prepare Failed Locators for Pages
+      # 20️⃣ Upload Test Output Artifact (Modified to trigger Pages hosting)
+      - name: Prepare and Upload Pages Artifact
         run: |
           mkdir -p public-artifacts
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then
-            cp "$FILE" public-artifacts/latest-failed-locator.json
+            cp "$FILE" public-artifacts/
           else
-            echo "No JSON found" > public-artifacts/status.txt
+            echo "No files found" > public-artifacts/empty.txt
           fi
 
-      # 2️⃣1️⃣ Upload Pages Artifact
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'public-artifacts/'
 
-  # 2️⃣2️⃣ New Job to deploy and show the link in Settings
+  # 21️⃣ Deployment Job (This creates the 'Published' link in Settings)
   deploy:
     needs: run-tests-and-publish-allure
     runs-on: ubuntu-latest
@@ -169,3 +171,8 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # 22️⃣ Display GitHub Pages report URL
+      - name: Display Report URL
+        run: |
+          echo "Report URL: https://atulbmhetre.github.io{{ env.REPORT_TS }}"
