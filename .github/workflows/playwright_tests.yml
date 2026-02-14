@@ -82,8 +82,8 @@ jobs:
 
       - name: Debug History Folder Before Defect Step
         run: |
-          echo "Checking target/allure-results/history"
-          ls -la target/allure-results/history || echo "Folder does not exist"
+          echo "====== HISTORY FOLDER CONTENT BEFORE DEFECT ======"
+          ls -R target/allure-results/history || echo "History folder missing"
 
       - name: Print history.json content
         run: |
@@ -117,7 +117,16 @@ jobs:
 
       # 1️⃣6️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
-        run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
+        run: |
+          echo "====== ENTERED STEP 16 - GENERATE ALLURE HTML ======"
+          allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
+#      - name: Generate Allure HTML
+#        run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
+
+      - name: Debug History Folder After Allure Generate
+        run: |
+          echo "====== HISTORY FOLDER CONTENT AFTER GENERATE ======"
+          ls -R target/allure-results/history || echo "History folder missing"
 
       # 1️⃣7️⃣ List generated report contents
       - name: List Generated Report
