@@ -164,6 +164,7 @@ jobs:
             echo "::set-output name=path::$FILE"
           else
             echo "No failedLocators JSON found. Skipping upload."
+          fi
         shell: bash
 
       - uses: actions/upload-artifact@v4
