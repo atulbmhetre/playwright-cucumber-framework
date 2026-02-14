@@ -42,9 +42,11 @@ public class AllureDefectAge {
                 JsonNode items = testNode.get("items");
                 if (items == null || !items.isArray()) continue;
 
+                String fullName = testNode.path("items").get(0).path("fullName").asText(historyId);
+
                 TestHistory testHistory = testHistoryMap.computeIfAbsent(
                         historyId,
-                        k -> new TestHistory(historyId, historyId)
+                        k -> new TestHistory(fullName, fullName)
                 );
 
                 for (JsonNode item : items) {
