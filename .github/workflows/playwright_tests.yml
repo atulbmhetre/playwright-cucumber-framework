@@ -161,11 +161,16 @@ jobs:
           
           if [ -n "$FILE" ]; then
             echo "Uploading $FILE"
-            gh-actions-upload-artifact "$FILE" "Failed_locators"
+            echo "::set-output name=path::$FILE"
           else
             echo "No failedLocators JSON found. Skipping upload."
-          fi
         shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+           name: Failed_locators
+           path: ${{ github.workspace }}/test-output/failedLocators_*.json
+
 
       # 22️⃣ Display GitHub Pages report URL
       - name: Display Report URL
