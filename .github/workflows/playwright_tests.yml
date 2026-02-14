@@ -6,12 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-# 🔑 Required to make the "Publish" link appear under Settings > Pages
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
 jobs:
   run-tests-and-publish-allure:
     runs-on: ubuntu-latest
@@ -70,12 +64,12 @@ jobs:
       # 9️⃣ Install Node & Playwright
       - name: Install Node and Playwright Browsers
         run: |
-          curl -fsSL https://deb.nodesource.com | sudo -E bash -
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
           sudo apt-get install -y nodejs
           npm install -g playwright
           npx playwright install
 
-      # 10️⃣ Run Maven tests
+      # 🔟 Run Maven tests
       - name: Run Test Suite
         run: |
           xvfb-run --auto-servernum -- mvn test \
@@ -144,35 +138,42 @@ jobs:
       - name: Push Report to GitHub Pages
         run: git push -u origin gh-pages
 
-      # 20️⃣ Upload Test Output Artifact (Modified to trigger Pages hosting)
-      - name: Prepare and Upload Pages Artifact
+      #      # 20️⃣ Upload Allure results as artifact
+      #      - name: Upload Allure Results Artifact
+      #        uses: actions/upload-artifact@v4
+      #        with:
+      #          name: allure-results
+      #          path: target/allure-results
+
+      # 21️⃣ Upload Test Output Artifact
+      - name: Upload Latest Failed Locator JSON
         run: |
-          mkdir -p public-artifacts
-          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          echo "Waiting for failedLocators JSON to exist..."
+          for i in {1..10}; do
+            FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+            if [ -n "$FILE" ]; then
+              echo "Found file: $FILE"
+              break
+            fi
+            echo "File not found yet, waiting 2s..."
+            sleep 2
+          done
+          
           if [ -n "$FILE" ]; then
-            cp "$FILE" public-artifacts/
+            echo "Uploading $FILE"
+            echo "::set-output name=path::$FILE"
           else
-            echo "No files found" > public-artifacts/empty.txt
+            echo "No failedLocators JSON found. Skipping upload."
           fi
+        shell: bash
 
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          path: 'public-artifacts/'
+          name: Failed_locators
+          path: ${{ github.workspace }}/test-output/failedLocators_*.json
 
-  # 21️⃣ Deployment Job (This creates the 'Published' link in Settings)
-  deploy:
-    needs: run-tests-and-publish-allure
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
 
       # 22️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
-          echo "Report URL: https://atulbmhetre.github.io{{ env.REPORT_TS }}"
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
