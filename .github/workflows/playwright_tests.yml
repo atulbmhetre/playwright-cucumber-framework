@@ -176,18 +176,13 @@ jobs:
             git rm -rf .
           fi
 
-          # Remove old root history and replace with latest
-          rm -rf history
-          mkdir -p history
-          cp -r temp-report-${{ env.REPORT_TS }}/history/* history/
+          # Delete everything except .git
+          find . -mindepth 1 -not -name '.git' -exec rm -rf {} +
 
-          # Create timestamped report folder
-          mkdir -p report-${{ env.REPORT_TS }}
-          cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
+          # Copy fresh report to ROOT
+          cp -r temp-report-${{ env.REPORT_TS }}/* .
 
-          git add history
-          git add report-${{ env.REPORT_TS }}
-
+          git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
@@ -376,18 +371,13 @@ jobs:
             git rm -rf .
           fi
 
-          # Remove old root history and replace with latest
-          rm -rf history
-          mkdir -p history
-          cp -r temp-report-${{ env.REPORT_TS }}/history/* history/
+          # Delete everything except .git
+          find . -mindepth 1 -not -name '.git' -exec rm -rf {} +
 
-          # Create timestamped report folder
-          mkdir -p report-${{ env.REPORT_TS }}
-          cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
+          # Copy fresh report to ROOT
+          cp -r temp-report-${{ env.REPORT_TS }}/* .
 
-          git add history
-          git add report-${{ env.REPORT_TS }}
-
+          git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
