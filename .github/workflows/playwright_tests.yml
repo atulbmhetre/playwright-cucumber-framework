@@ -109,6 +109,7 @@ jobs:
 
       # 🔟 Run Maven tests
       - name: Run Test Suite
+        id: run_tests
         continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn test \
@@ -116,7 +117,7 @@ jobs:
             -Dbrowser=$BROWSER \
             -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=$THREADCOUNT \
-            -Dcucumber.filter.tags="$TAGS"|| echo "Tests failed but continuing for report generation"
+            -Dcucumber.filter.tags="$TAGS"
 
       # 1️⃣1️⃣ Backup history folder with timestamp
       - name: Backup Allure History
@@ -239,10 +240,12 @@ jobs:
 
       # 2️⃣3️⃣ Upload Defect Age Report Artifact
       - name: Upload Defect Age Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
           path: target/defect-age-report.csv
+          if-no-files-found: warn
 
       # 2️⃣4️⃣ Display GitHub Pages report URL
       - name: Display Report URL
@@ -462,10 +465,12 @@ jobs:
 
       # 2️⃣3️⃣ Upload Defect Age Report Artifact
       - name: Upload Defect Age Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
           path: target/defect-age-report.csv
+          if-no-files-found: warn
 
       # 2️⃣4️⃣ Display GitHub Pages report URL
       - name: Display Report URL
