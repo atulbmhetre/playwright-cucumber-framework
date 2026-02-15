@@ -10,153 +10,141 @@ import java.util.*;
 
 public class AllureDefectAge {
 
-    private static final String HISTORY_DIR =
-            System.getProperty("history.dir", "target/allure-results/history");
-    private static final String OUTPUT_FILE = "target/defect-age-report.csv"; // File for CI artifact
-    private static final Set<String> DEFECT_STATUSES =
-            Set.of("failed", "broken");
+    private static final String ALLURE_RESULTS_DIR = "target/allure-results";
+    private static final String OUTPUT_CSV = "target/defect-age-report.csv";
 
-    public static void main(String[] args) throws Exception {
-        File folder = Paths.get(HISTORY_DIR).toFile();
+    public static void main(String[] args) throws IOException {
 
-        if (!folder.exists() || !folder.isDirectory()) {
-            System.out.println("History folder not found: " + HISTORY_DIR);
+        File resultsDir = new File(ALLURE_RESULTS_DIR);
 
-            File outFile = new File(OUTPUT_FILE);
-            outFile.getParentFile().mkdirs();
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile))) {
-                writer.write("Test Name,Runs Failed,Age(Days),First Failed,Last Failed\n");
-            }
+        if (!resultsDir.exists()) {
+            System.out.println("Allure results directory not found.");
             return;
         }
 
-        ObjectMapper mapper = new ObjectMapper();
         Map<String, TestHistory> testHistoryMap = new HashMap<>();
+        ObjectMapper mapper = new ObjectMapper();
 
-        for (File file : Objects.requireNonNull(folder.listFiles((dir, name) -> name.endsWith(".json")))) {
+        File[] files = resultsDir.listFiles((dir, name) -> name.endsWith("-result.json"));
+
+        if (files == null) {
+            System.out.println("No result files found.");
+            return;
+        }
+
+        for (File file : files) {
 
             JsonNode root = mapper.readTree(file);
 
-            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+            String historyId = getSafeText(root, "historyId");
+            String fullName = getSafeText(root, "fullName");
+            String status = getSafeText(root, "status");
 
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> entry = fields.next();
+            if (historyId == null || fullName == null) {
+                continue;
+            }
 
-                String historyId = entry.getKey();
-                JsonNode testNode = entry.getValue();
+            // Extract class & test name
+            String className;
+            String testName;
 
-                JsonNode items = testNode.get("items");
-                if (items == null || !items.isArray()) continue;
+            if (fullName.contains(".")) {
+                int lastDot = fullName.lastIndexOf(".");
+                className = fullName.substring(0, lastDot);
+                testName = fullName.substring(lastDot + 1);
+            } else {
+                className = "UnknownClass";
+                testName = fullName;
+            }
 
-                String fullName = testNode.path("items").get(0).path("fullName").asText(historyId);
+            TestHistory testHistory = testHistoryMap.computeIfAbsent(
+                    historyId,
+                    k -> new TestHistory(className, testName)
+            );
 
-                TestHistory testHistory = testHistoryMap.computeIfAbsent(
-                        historyId,
-                        k -> new TestHistory(fullName, fullName)
-                );
+            testHistory.incrementTotalRuns();
 
-                for (JsonNode item : items) {
-                    String status = item.get("status").asText();
-                    long timestamp = item.get("time").get("start").asLong();
-
-                    testHistory.addStatus(status, timestamp);
-                }
+            if ("failed".equalsIgnoreCase(status) ||
+                    "broken".equalsIgnoreCase(status)) {
+                testHistory.incrementDefect();
             }
         }
 
-        List<DefectReport> defectReports = new ArrayList<>();
+        writeCsv(testHistoryMap);
 
-        for (TestHistory testHistory : testHistoryMap.values()) {
-            List<StatusEntry> statuses = testHistory.getStatuses();
-            // Sort by timestamp ascending
-            statuses.sort(Comparator.comparingLong(StatusEntry::getTimestamp));
+        System.out.println("Defect age report generated successfully.");
+    }
 
-            // Count consecutive failures from last run backwards
-            int consecutiveFailures = 0;
-            long firstFailTs = 0;
-            long lastFailTs = 0;
+    private static String getSafeText(JsonNode node, String field) {
+        return node.has(field) && !node.get(field).isNull()
+                ? node.get(field).asText()
+                : null;
+    }
 
-            for (int i = statuses.size() - 1; i >= 0; i--) {
-                StatusEntry s = statuses.get(i);
-                if (DEFECT_STATUSES.contains(s.getStatus().toLowerCase())) {
-                    consecutiveFailures++;
-                    lastFailTs = s.getTimestamp();
-                    firstFailTs = s.getTimestamp(); // will update as we move backwards
-                } else {
-                    break;
-                }
-            }
+    private static void writeCsv(Map<String, TestHistory> map) throws IOException {
 
-            if (consecutiveFailures > 0) {
-                int firstFailIndex = statuses.size() - consecutiveFailures;
-                firstFailTs = statuses.get(firstFailIndex).getTimestamp();
-                lastFailTs = statuses.get(statuses.size() - 1).getTimestamp();
+        FileWriter writer = new FileWriter(OUTPUT_CSV);
 
-                Date firstFailDate = new Date(firstFailTs);
-                Date lastFailDate = new Date(lastFailTs);
+        writer.append("Class Name,Test Name,Defect Count,Total Runs,Defect Age\n");
 
-                long ageDays = (lastFailDate.getTime() - firstFailDate.getTime()) / (1000 * 60 * 60 * 24) + 1;
-
-                defectReports.add(new DefectReport(
-                        testHistory.getName(),
-                        testHistory.getFullName(),
-                        consecutiveFailures,
-                        firstFailDate,
-                        lastFailDate,
-                        ageDays
-                ));
-            }
+        for (TestHistory th : map.values()) {
+            writer.append(th.getClassName()).append(",")
+                    .append(th.getTestName()).append(",")
+                    .append(String.valueOf(th.getDefectCount())).append(",")
+                    .append(String.valueOf(th.getTotalRuns())).append(",")
+                    .append(String.valueOf(th.getDefectAge()))
+                    .append("\n");
         }
 
-        // Sort by age descending
-        defectReports.sort((a, b) -> Long.compare(b.getAgeDays(), a.getAgeDays()));
-
-        // Prepare output
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        StringBuilder sb = new StringBuilder();
-        sb.append("Test Name,Runs Failed,Age(Days),First Failed,Last Failed\n");
-
-        for (DefectReport d : defectReports) {
-            sb.append(String.format("%s,%d,%d,%s,%s\n",
-                    d.getName(),
-                    d.getConsecutiveFailures(),
-                    d.getAgeDays(),
-                    sdf.format(d.getFirstFailed()),
-                    sdf.format(d.getLastFailed())));
-        }
-
-        // Print to console
-        System.out.println(sb.toString());
-
-        // Write to file
-        File outFile = new File(OUTPUT_FILE);
-        outFile.getParentFile().mkdirs(); // create target folder if not exists
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile))) {
-            writer.write(sb.toString());
-        }
-
-        System.out.println("Defect age report written to: " + OUTPUT_FILE);
+        writer.flush();
+        writer.close();
     }
 }
 
-// Helper classes remain same
+
+// ================= UPDATED HELPER CLASSES =================
+
 class TestHistory {
-    private final String name;
-    private final String fullName;
-    private final List<StatusEntry> statuses = new ArrayList<>();
 
-    public TestHistory(String name, String fullName) {
-        this.name = name;
-        this.fullName = fullName;
+    private final String className;
+    private final String testName;
+    private int defectCount;
+    private int totalRuns;
+
+    public TestHistory(String className, String testName) {
+        this.className = className;
+        this.testName = testName;
+        this.defectCount = 0;
+        this.totalRuns = 0;
     }
 
-    public void addStatus(String status, long timestamp) {
-        statuses.add(new StatusEntry(status, timestamp));
+    public void incrementDefect() {
+        defectCount++;
     }
 
-    public String getName() { return name; }
-    public String getFullName() { return fullName; }
-    public List<StatusEntry> getStatuses() { return statuses; }
+    public void incrementTotalRuns() {
+        totalRuns++;
+    }
+
+    public String getClassName() {
+        return className;
+    }
+
+    public String getTestName() {
+        return testName;
+    }
+
+    public int getDefectCount() {
+        return defectCount;
+    }
+
+    public int getTotalRuns() {
+        return totalRuns;
+    }
+
+    public int getDefectAge() {
+        return defectCount;
+    }
 }
 
 class StatusEntry {
@@ -173,24 +161,25 @@ class StatusEntry {
 }
 
 class DefectReport {
-    private final String name;
-    private final String fullName;
+    private final String className;
+    private final String testName;
     private final int consecutiveFailures;
     private final Date firstFailed;
     private final Date lastFailed;
     private final long ageDays;
 
-    public DefectReport(String name, String fullName, int consecutiveFailures, Date firstFailed, Date lastFailed, long ageDays) {
-        this.name = name;
-        this.fullName = fullName;
+    public DefectReport(String className, String testName, int consecutiveFailures,
+                        Date firstFailed, Date lastFailed, long ageDays) {
+        this.className = className;
+        this.testName = testName;
         this.consecutiveFailures = consecutiveFailures;
         this.firstFailed = firstFailed;
         this.lastFailed = lastFailed;
         this.ageDays = ageDays;
     }
 
-    public String getName() { return name; }
-    public String getFullName() { return fullName; }
+    public String getClassName() { return className; }
+    public String getTestName() { return testName; }
     public int getConsecutiveFailures() { return consecutiveFailures; }
     public Date getFirstFailed() { return firstFailed; }
     public Date getLastFailed() { return lastFailed; }
