@@ -32,19 +32,19 @@ on:
 jobs:
 
   smoke-tests:
-    if: ${{ github.event.inputs.suite == 'smoke' }}
+    if: ${{ github.event_name == 'push' || github.event.inputs.suite == 'smoke' }}
     runs-on: ubuntu-latest
     env:
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64
-      ENV: ${{ github.event.inputs.env }}
-      BROWSER: ${{ github.event.inputs.browser }}
+      ENV: ${{ github.event.inputs.env || 'qa' }}
+      BROWSER: ${{ github.event.inputs.browser || 'chromium' }}
       HEADLESS: true
-      THREADCOUNT: ${{ github.event.inputs.threadcount }}
-      TAGS: ${{ github.event.inputs.tags }}
+      THREADCOUNT: ${{ github.event.inputs.threadcount || '3' }}
+      TAGS: ${{ github.event.inputs.tags || '@smoke' }}
     steps:
 
-      # 0️⃣ Validate mandatory inputs
-      - name: Validate mandatory ENV and BROWSER
+      # 0️⃣ Mandatory input check
+      - name: Validate mandatory inputs
         run: |
           if [ -z "$ENV" ]; then
             echo "ERROR: 'env' is mandatory. Please provide - ENV"
@@ -223,7 +223,7 @@ jobs:
           echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
 
   regression-tests:
-    if: ${{ github.event.inputs.suite == 'regression' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression' }}
     runs-on: ubuntu-latest
     env:
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64
@@ -232,11 +232,10 @@ jobs:
       HEADLESS: true
       THREADCOUNT: ${{ github.event.inputs.threadcount }}
       TAGS: ${{ github.event.inputs.tags }}
-
     steps:
 
-      # 0️⃣ Validate mandatory inputs
-      - name: Validate mandatory ENV and BROWSER
+      # 0️⃣ Mandatory input check
+      - name: Validate mandatory inputs
         run: |
           if [ -z "$ENV" ]; then
             echo "ERROR: 'env' is mandatory. Please provide - ENV"
