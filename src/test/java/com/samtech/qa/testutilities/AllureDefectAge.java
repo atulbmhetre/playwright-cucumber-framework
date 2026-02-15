@@ -21,6 +21,12 @@ public class AllureDefectAge {
 
         if (!folder.exists() || !folder.isDirectory()) {
             System.out.println("History folder not found: " + HISTORY_DIR);
+
+            File outFile = new File(OUTPUT_FILE);
+            outFile.getParentFile().mkdirs();
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile))) {
+                writer.write("Test Name,Runs Failed,Age(Days),First Failed,Last Failed\n");
+            }
             return;
         }
 
