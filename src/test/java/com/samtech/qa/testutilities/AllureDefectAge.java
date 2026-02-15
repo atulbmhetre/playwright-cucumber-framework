@@ -10,6 +10,7 @@ import java.util.*;
 
 public class AllureDefectAge {
 
+    // Default directories
     private static final String ALLURE_RESULTS_DIR = "target/allure-results";
     private static final String OUTPUT_CSV = "target/defect-age-report.csv";
 
@@ -17,18 +18,18 @@ public class AllureDefectAge {
 
         File resultsDir = new File(ALLURE_RESULTS_DIR);
 
-        if (!resultsDir.exists()) {
-            System.out.println("Allure results directory not found.");
+        if (!resultsDir.exists() || !resultsDir.isDirectory()) {
+            System.out.println("Allure results directory not found: " + ALLURE_RESULTS_DIR);
             return;
         }
 
+        // Map<historyId, TestHistory>
         Map<String, TestHistory> testHistoryMap = new HashMap<>();
         ObjectMapper mapper = new ObjectMapper();
 
         File[] files = resultsDir.listFiles((dir, name) -> name.endsWith("-result.json"));
-
-        if (files == null) {
-            System.out.println("No result files found.");
+        if (files == null || files.length == 0) {
+            System.out.println("No result files found in: " + ALLURE_RESULTS_DIR);
             return;
         }
 
@@ -37,26 +38,17 @@ public class AllureDefectAge {
             JsonNode root = mapper.readTree(file);
 
             String historyId = getSafeText(root, "historyId");
-            String fullName = getSafeText(root, "fullName");
             String status = getSafeText(root, "status");
+            String testName = getSafeText(root, "name"); // scenario/test name
+            String fullName = getSafeText(root, "fullName"); // feature or suite name
 
-            if (historyId == null || fullName == null) {
-                continue;
+            if (historyId == null || testName == null) {
+                continue; // skip invalid entries
             }
 
-            // Extract class & test name
-            String className;
-            String testName;
+            String className = (fullName != null) ? fullName : "UnknownClass";
 
-            if (fullName.contains(".")) {
-                int lastDot = fullName.lastIndexOf(".");
-                className = fullName.substring(0, lastDot);
-                testName = fullName.substring(lastDot + 1);
-            } else {
-                className = "UnknownClass";
-                testName = fullName;
-            }
-
+            // Aggregate by historyId
             TestHistory testHistory = testHistoryMap.computeIfAbsent(
                     historyId,
                     k -> new TestHistory(className, testName)
@@ -64,27 +56,22 @@ public class AllureDefectAge {
 
             testHistory.incrementTotalRuns();
 
-            if ("failed".equalsIgnoreCase(status) ||
-                    "broken".equalsIgnoreCase(status)) {
+            if ("failed".equalsIgnoreCase(status) || "broken".equalsIgnoreCase(status)) {
                 testHistory.incrementDefect();
             }
         }
 
         writeCsv(testHistoryMap);
-
-        System.out.println("Defect age report generated successfully.");
+        System.out.println("====== DEFECT AGE REPORT GENERATED ======");
+        System.out.println("Defect age report written to: " + OUTPUT_CSV);
     }
 
     private static String getSafeText(JsonNode node, String field) {
-        return node.has(field) && !node.get(field).isNull()
-                ? node.get(field).asText()
-                : null;
+        return node.has(field) && !node.get(field).isNull() ? node.get(field).asText() : null;
     }
 
     private static void writeCsv(Map<String, TestHistory> map) throws IOException {
-
         FileWriter writer = new FileWriter(OUTPUT_CSV);
-
         writer.append("Class Name,Test Name,Defect Count,Total Runs,Defect Age\n");
 
         for (TestHistory th : map.values()) {
