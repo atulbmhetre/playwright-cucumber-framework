@@ -43,6 +43,18 @@ jobs:
       TAGS: ${{ github.event.inputs.tags }}
     steps:
 
+      # 0️⃣ Validate mandatory inputs
+      - name: Validate mandatory ENV and BROWSER
+        run: |
+          if [ -z "$ENV" ]; then
+            echo "ERROR: 'env' is mandatory. Please provide - ENV"
+            exit 1
+          fi
+          if [ -z "$BROWSER" ]; then
+            echo "ERROR: 'browser' is mandatory. Please provide - BROWSER"
+            exit 1
+          fi
+
       # 1️⃣ Checkout the repository
       - name: Checkout Repository Code
         uses: actions/checkout@v4
@@ -222,7 +234,18 @@ jobs:
       TAGS: ${{ github.event.inputs.tags }}
 
     steps:
-      # Only difference: 🔟 Run Maven tests uses continue-on-error
+
+      # 0️⃣ Validate mandatory inputs
+      - name: Validate mandatory ENV and BROWSER
+        run: |
+          if [ -z "$ENV" ]; then
+            echo "ERROR: 'env' is mandatory. Please provide - ENV"
+            exit 1
+          fi
+          if [ -z "$BROWSER" ]; then
+            echo "ERROR: 'browser' is mandatory. Please provide - BROWSER"
+            exit 1
+          fi
 
       # 1️⃣ Checkout the repository
       - name: Checkout Repository Code
