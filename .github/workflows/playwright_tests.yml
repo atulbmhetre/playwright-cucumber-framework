@@ -140,18 +140,24 @@ jobs:
         id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 1️⃣4️⃣ Create temporary report folder
+      # 1️⃣4️⃣ Set report metadata
+      - name: Set Report Metadata
+        run: |
+          echo "SUITE_NAME=smoke" >> $GITHUB_ENV
+          echo "REPORT_ID=${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}" >> $GITHUB_ENV
+
+      # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
         run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣5️⃣ Generate Allure HTML into temp folder
+      # 1️⃣6️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
         run: |
-          echo "====== ENTERED STEP 15 - GENERATE ALLURE HTML ======"
+          echo "====== ENTERED STEP 16 - GENERATE ALLURE HTML ======"
           allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
           echo "====== ALLURE HTML GENERATED ======"
 
-      # 1️⃣6️⃣ Generate Defect Age Report
+      # 1️⃣7️⃣ Generate Defect Age Report
       - name: Generate Defect Age Report
         run: |
           echo "====== GENERATING DEFECT AGE REPORT ======"
@@ -160,21 +166,22 @@ jobs:
             -Dexec.classpathScope=test \
             -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
-          
+
           # Preserve CSV outside workspace before git clean/checkout
           mkdir -p /tmp/defect-age
           cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
 
-      # 1️⃣7️⃣ List generated report contents
+      # 1️⃣8️⃣ List generated report contents
       - name: List Generated Report
         run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣8️⃣ Configure Git for push
+      # 1️⃣9️⃣ Configure Git for push
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      # 2️⃣0️⃣ Debug Report Folders
       - name: Debug Report Folders
         if: always()
         run: |
@@ -185,7 +192,7 @@ jobs:
           echo "=== TEMP REPORTS ==="
           ls -l temp-report-* || true
 
-      # 1️⃣9️⃣ Commit Allure HTML to gh-pages (FINAL SAFE VERSION)
+      # 2️⃣1️⃣ Commit Allure HTML to gh-pages (FINAL SAFE VERSION)
       - name: Commit Allure Report
         if: always()
         run: |
@@ -207,33 +214,31 @@ jobs:
             git checkout --orphan gh-pages
           fi
 
-          # Keep previous reports; create this run's report folder
-          mkdir -p report-${{ env.REPORT_TS }}
+          # Immutable archive per run + stable latest per suite
+          mkdir -p reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}
+          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}/
 
-          # Copy fresh report into timestamped folder
-          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+          rm -rf reports/${{ env.SUITE_NAME }}/latest
+          mkdir -p reports/${{ env.SUITE_NAME }}/latest
+          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/latest/
 
-          # Also update top-level history for next run restore logic (optional but recommended)
+          # Update top-level history for next run restore logic
           rm -rf history
           cp -r /tmp/allure-report/history history || true
 
           git add .
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          git commit -m "Update ${{ env.SUITE_NAME }} Allure report ${{ env.REPORT_ID }}" || echo "No changes to commit"
 
           git push origin gh-pages --force
 
-      # 2️⃣0️⃣ Push Allure HTML to gh-pages
-      - name: Push Report to GitHub Pages
-        run: git push -u origin gh-pages
-
-      # 2️⃣1️⃣ Upload Allure results as artifact
+      # 2️⃣2️⃣ Upload Allure results as artifact
       - name: Upload Allure Results Artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: target/allure-results
 
-      # 2️⃣2️⃣ Upload Latest Failed Locator JSON
+      # 2️⃣3️⃣ Upload Latest Failed Locator JSON
       - name: Detect Latest Failed Locator JSON
         run: |
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
@@ -250,7 +255,7 @@ jobs:
           name: Failed_locators
           path: ${{ env.FILE_PATH }}
 
-      # 2️⃣3️⃣ Upload Defect Age Report Artifact
+      # 2️⃣4️⃣ Upload Defect Age Report Artifact
       - name: Upload Defect Age Report Artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -259,12 +264,13 @@ jobs:
           path: /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
           if-no-files-found: warn
 
-      # 2️⃣4️⃣ Display GitHub Pages report URL
+      # 2️⃣5️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+          echo "Latest smoke report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/smoke/latest/"
+          echo "Archived smoke report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/smoke/${{ env.REPORT_ID }}/"
 
-      # 2️⃣5️⃣ Fail job if tests failed
+      # 2️⃣6️⃣ Fail job if tests failed
       - name: Fail job if tests failed
         if: steps.run_tests.outcome == 'failure'
         run: exit 1
@@ -351,6 +357,7 @@ jobs:
 
       # 🔟 Run Maven tests
       - name: Run Test Suite
+        id: run_tests
         continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn test \
@@ -377,18 +384,24 @@ jobs:
         id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 1️⃣4️⃣ Create temporary report folder
+      # 1️⃣4️⃣ Set report metadata
+      - name: Set Report Metadata
+        run: |
+          echo "SUITE_NAME=regression" >> $GITHUB_ENV
+          echo "REPORT_ID=${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}" >> $GITHUB_ENV
+
+      # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
         run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣5️⃣ Generate Allure HTML into temp folder
+      # 1️⃣6️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
         run: |
-          echo "====== ENTERED STEP 15 - GENERATE ALLURE HTML ======"
+          echo "====== ENTERED STEP 16 - GENERATE ALLURE HTML ======"
           allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
           echo "====== ALLURE HTML GENERATED ======"
 
-      # 1️⃣6️⃣ Generate Defect Age Report
+      # 1️⃣7️⃣ Generate Defect Age Report
       - name: Generate Defect Age Report
         run: |
           echo "====== GENERATING DEFECT AGE REPORT ======"
@@ -397,21 +410,22 @@ jobs:
             -Dexec.classpathScope=test \
             -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
-          
+
           # Preserve CSV outside workspace before git clean/checkout
           mkdir -p /tmp/defect-age
           cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
 
-      # 1️⃣7️⃣ List generated report contents
+      # 1️⃣8️⃣ List generated report contents
       - name: List Generated Report
         run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      # 1️⃣8️⃣ Configure Git for push
+      # 1️⃣9️⃣ Configure Git for push
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      # 2️⃣0️⃣ Debug Report Folders
       - name: Debug Report Folders
         if: always()
         run: |
@@ -422,7 +436,7 @@ jobs:
           echo "=== TEMP REPORTS ==="
           ls -l temp-report-* || true
 
-      # 1️⃣9️⃣ Commit Allure HTML to gh-pages (FINAL SAFE VERSION)
+      # 2️⃣1️⃣ Commit Allure HTML to gh-pages (FINAL SAFE VERSION)
       - name: Commit Allure Report
         if: always()
         run: |
@@ -444,33 +458,31 @@ jobs:
             git checkout --orphan gh-pages
           fi
 
-          # Keep previous reports; create this run's report folder
-          mkdir -p report-${{ env.REPORT_TS }}
+          # Immutable archive per run + stable latest per suite
+          mkdir -p reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}
+          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}/
 
-          # Copy fresh report into timestamped folder
-          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+          rm -rf reports/${{ env.SUITE_NAME }}/latest
+          mkdir -p reports/${{ env.SUITE_NAME }}/latest
+          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/latest/
 
-          # Also update top-level history for next run restore logic (optional but recommended)
+          # Update top-level history for next run restore logic
           rm -rf history
           cp -r /tmp/allure-report/history history || true
 
           git add .
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          git commit -m "Update ${{ env.SUITE_NAME }} Allure report ${{ env.REPORT_ID }}" || echo "No changes to commit"
 
           git push origin gh-pages --force
 
-      # 2️⃣0️⃣ Push Allure HTML to gh-pages
-      - name: Push Report to GitHub Pages
-        run: git push -u origin gh-pages
-
-      # 2️⃣1️⃣ Upload Allure results as artifact
+      # 2️⃣2️⃣ Upload Allure results as artifact
       - name: Upload Allure Results Artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: target/allure-results
 
-      # 2️⃣2️⃣ Upload Latest Failed Locator JSON
+      # 2️⃣3️⃣ Upload Latest Failed Locator JSON
       - name: Detect Latest Failed Locator JSON
         run: |
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
@@ -487,7 +499,7 @@ jobs:
           name: Failed_locators
           path: ${{ env.FILE_PATH }}
 
-      # 2️⃣3️⃣ Upload Defect Age Report Artifact
+      # 2️⃣4️⃣ Upload Defect Age Report Artifact
       - name: Upload Defect Age Report Artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -496,7 +508,13 @@ jobs:
           path: /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
           if-no-files-found: warn
 
-      # 2️⃣4️⃣ Display GitHub Pages report URL
+      # 2️⃣5️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+          echo "Latest regression report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/regression/latest/"
+          echo "Archived regression report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/regression/${{ env.REPORT_ID }}/"
+
+      # 2️⃣6️⃣ Fail job if tests failed
+      - name: Fail job if tests failed
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
