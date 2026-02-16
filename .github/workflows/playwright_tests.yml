@@ -108,6 +108,7 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
           rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
           mkdir -p target/allure-results
           export CUCUMBER_FILTER_TAGS="$TAGS"
@@ -121,6 +122,7 @@ jobs:
 
       - name: 1️⃣1️⃣ Write Allure Environment Info
         run: |
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
           cat > target/allure-results/environment.properties <<EOF
           ENV=$ENV
           BROWSER=$BROWSER
@@ -134,37 +136,37 @@ jobs:
 
       - name: 1️⃣2️⃣ Backup Allure History
         run: |
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      - name: 1️⃣3️⃣ Skip Clean Old Allure Reports (preserve history)
+      - name: 1️⃣3️⃣ Skip Clean Old Allure Reports
         run: echo "Skipping cleanup to preserve previous reports"
 
-      - name: 1️⃣4️⃣ Set Timestamp for Report
-        id: timestamp
+      - name: 1️⃣4️⃣ Set REPORT_TS shell variable
         run: echo "REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
 
       - name: 1️⃣5️⃣ Create Temporary Report Folder
-        run: mkdir -p temp-report-${{ env.REPORT_TS }}
+        run: |
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          mkdir -p temp-report-$REPORT_TS
 
       - name: 1️⃣6️⃣ Generate Allure HTML
         run: |
-          echo "====== ENTERED STEP 16 - GENERATE ALLURE HTML ======"
-          allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
-          echo "====== ALLURE HTML GENERATED ======"
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          allure generate target/allure-results -o temp-report-$REPORT_TS --clean
 
       - name: 1️⃣7️⃣ Generate Defect Age Report
         run: |
-          echo "====== GENERATING DEFECT AGE REPORT ======"
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
           mvn test-compile exec:java \
             -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
             -Dexec.classpathScope=test \
-            -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
-          echo "====== DEFECT AGE REPORT GENERATED ======"
+            -Dhistory.dir=temp-report-$REPORT_TS/history
           mkdir -p /tmp/defect-age
-          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
+          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-$REPORT_TS.csv
 
       - name: 1️⃣8️⃣ Detect & Upload Latest Failed Locator JSON
         run: |
@@ -181,8 +183,9 @@ jobs:
       - name: 2️⃣0️⃣ Commit Allure Report to gh-pages
         if: always()
         run: |
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
           mkdir -p /tmp/allure-report
-          cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
+          cp -r temp-report-$REPORT_TS/* /tmp/allure-report/
           git reset --hard
           git clean -fd
           git fetch origin
@@ -191,12 +194,12 @@ jobs:
           else
             git checkout --orphan gh-pages
           fi
-          mkdir -p report-${{ env.REPORT_TS }}
-          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+          mkdir -p report-$REPORT_TS
+          cp -r /tmp/allure-report/* report-$REPORT_TS/
           rm -rf history-smoke
           cp -r /tmp/allure-report/history history-smoke || true
           git add .
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          git commit -m "Update Allure report $REPORT_TS" || echo "No changes to commit"
           git push origin gh-pages --force
 
       - name: 2️⃣1️⃣ Upload Allure Results Artifact
@@ -216,12 +219,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
-          path: /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
+          path: /tmp/defect-age/defect-age-report-${{ github.run_id }}-${{ github.run_attempt }}.csv
           if-no-files-found: warn
 
       - name: 2️⃣4️⃣ Display GitHub Pages Report URL
         run: |
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-$REPORT_TS"
 
       - name: 2️⃣5️⃣ Fail job if tests failed
         if: steps.run_tests.outcome == 'failure'
@@ -240,6 +244,7 @@ jobs:
       TAGS: ${{ github.event.inputs.tags }}
     steps:
 
+      # Regression steps fully expanded with REPORT_TS="regression-..." and HISTORY="history-regression"
       - name: 0️⃣ Validate mandatory inputs
         run: |
           if [ -z "$ENV" ]; then
@@ -305,6 +310,7 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
           rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
           mkdir -p target/allure-results
           export CUCUMBER_FILTER_TAGS="$TAGS"
@@ -318,6 +324,7 @@ jobs:
 
       - name: 1️⃣1️⃣ Write Allure Environment Info
         run: |
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
           cat > target/allure-results/environment.properties <<EOF
           ENV=$ENV
           BROWSER=$BROWSER
@@ -331,37 +338,37 @@ jobs:
 
       - name: 1️⃣2️⃣ Backup Allure History
         run: |
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      - name: 1️⃣3️⃣ Skip Clean Old Allure Reports (preserve history)
+      - name: 1️⃣3️⃣ Skip Clean Old Allure Reports
         run: echo "Skipping cleanup to preserve previous reports"
 
-      - name: 1️⃣4️⃣ Set Timestamp for Report
-        id: timestamp
+      - name: 1️⃣4️⃣ Set REPORT_TS shell variable
         run: echo "REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
 
       - name: 1️⃣5️⃣ Create Temporary Report Folder
-        run: mkdir -p temp-report-${{ env.REPORT_TS }}
+        run: |
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
+          mkdir -p temp-report-$REPORT_TS
 
       - name: 1️⃣6️⃣ Generate Allure HTML
         run: |
-          echo "====== ENTERED STEP 16 - GENERATE ALLURE HTML ======"
-          allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
-          echo "====== ALLURE HTML GENERATED ======"
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
+          allure generate target/allure-results -o temp-report-$REPORT_TS --clean
 
       - name: 1️⃣7️⃣ Generate Defect Age Report
         run: |
-          echo "====== GENERATING DEFECT AGE REPORT ======"
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
           mvn test-compile exec:java \
             -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
             -Dexec.classpathScope=test \
-            -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
-          echo "====== DEFECT AGE REPORT GENERATED ======"
+            -Dhistory.dir=temp-report-$REPORT_TS/history
           mkdir -p /tmp/defect-age
-          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
+          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-$REPORT_TS.csv
 
       - name: 1️⃣8️⃣ Detect & Upload Latest Failed Locator JSON
         run: |
@@ -378,8 +385,9 @@ jobs:
       - name: 2️⃣0️⃣ Commit Allure Report to gh-pages
         if: always()
         run: |
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
           mkdir -p /tmp/allure-report
-          cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
+          cp -r temp-report-$REPORT_TS/* /tmp/allure-report/
           git reset --hard
           git clean -fd
           git fetch origin
@@ -388,12 +396,12 @@ jobs:
           else
             git checkout --orphan gh-pages
           fi
-          mkdir -p report-${{ env.REPORT_TS }}
-          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+          mkdir -p report-$REPORT_TS
+          cp -r /tmp/allure-report/* report-$REPORT_TS/
           rm -rf history-regression
           cp -r /tmp/allure-report/history history-regression || true
           git add .
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          git commit -m "Update Allure report $REPORT_TS" || echo "No changes to commit"
           git push origin gh-pages --force
 
       - name: 2️⃣1️⃣ Upload Allure Results Artifact
@@ -413,12 +421,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
-          path: /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
+          path: /tmp/defect-age/defect-age-report-${{ github.run_id }}-${{ github.run_attempt }}.csv
           if-no-files-found: warn
 
       - name: 2️⃣4️⃣ Display GitHub Pages Report URL
         run: |
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-$REPORT_TS"
 
       - name: 2️⃣5️⃣ Fail job if tests failed
         if: steps.run_tests.outcome == 'failure'
