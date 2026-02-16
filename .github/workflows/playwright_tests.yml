@@ -136,11 +136,14 @@ jobs:
 
       - name: 1️⃣2️⃣ Backup Allure History
         run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
-          cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
-          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+          if [ -d "target/allure-results/history" ]; then
+            cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+            echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+          else
+            echo "No history folder to backup (first run or test failed before history created)."
+          fi
 
       - name: 1️⃣3️⃣ Skip Clean Old Allure Reports
         run: echo "Skipping cleanup to preserve previous reports"
@@ -338,11 +341,14 @@ jobs:
 
       - name: 1️⃣2️⃣ Backup Allure History
         run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
-          cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
-          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+          if [ -d "target/allure-results/history" ]; then
+            cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+            echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+          else
+            echo "No history folder to backup (first run or test failed before history created)."
+          fi
 
       - name: 1️⃣3️⃣ Skip Clean Old Allure Reports
         run: echo "Skipping cleanup to preserve previous reports"
