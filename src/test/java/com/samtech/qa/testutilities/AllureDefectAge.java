@@ -9,7 +9,9 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
-        File folder = new File("target/allure-results");
+        // Use provided path or default to allure-results
+        String resultsPath = (args.length > 0) ? args[0] : "target/allure-results";
+        File folder = new File(resultsPath);
         if (!folder.exists()) return;
 
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
@@ -22,46 +24,41 @@ public class AllureDefectAge {
         Map<String, String[]> defects = new HashMap<>();
         for (File f : files) {
             JsonNode r = mapper.readTree(f);
-            String status = r.path("status").asText("").toLowerCase();
-            if (status.equals("failed") || status.equals("broken")) {
+            if (r.path("status").asText("").matches("failed|broken")) {
                 String id = r.path("historyId").asText("unknown");
                 defects.put(id, new String[]{
-                        r.path("fullName").asText("N/A"), // data[0]
-                        r.path("name").asText("N/A"),     // data[1]
-                        r.path("statusDetails").path("message").asText("No Msg").replace(",", ";").replace("\n", " "), // data[2]
-                        String.valueOf(r.path("start").asLong(0)) // data[3]
+                        r.path("fullName").asText("N/A"),
+                        r.path("name").asText("N/A"),
+                        r.path("statusDetails").path("message").asText("No Msg").replace(",", ";").replace("\n", " "),
+                        String.valueOf(r.path("start").asLong(0))
                 });
             }
         }
 
-        File hf = new File("target/allure-results/history/history.json");
-        JsonNode hr = (hf.exists()) ? mapper.readTree(hf) : null;
+        File hf = new File(resultsPath + "/history/history.json");
+        JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         try (PrintWriter w = new PrintWriter(new FileWriter(fileName))) {
             w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
             for (var entry : defects.entrySet()) {
                 int age = 1;
-                String[] data = entry.getValue();
-                long firstFailTime = Long.parseLong(data[3]);
-
+                String[] d = entry.getValue();
+                long firstFailTime = Long.parseLong(d[3]);
                 if (hr != null && hr.has(entry.getKey())) {
                     List<JsonNode> items = new ArrayList<>();
                     hr.get(entry.getKey()).path("items").forEach(items::add);
                     items.sort((a, b) -> Long.compare(b.path("time").path("stop").asLong(0), a.path("time").path("stop").asLong(0)));
-
                     for (JsonNode item : items) {
-                        String hs = item.path("status").asText("").toLowerCase();
-                        if (hs.equals("failed") || hs.equals("broken")) {
+                        if (item.path("status").asText("").matches("failed|broken")) {
                             age++;
                             firstFailTime = item.path("time").path("start").asLong(firstFailTime);
                         } else break;
                     }
                 }
                 String dateStr = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
-                w.println(data[0] + "," + data[1] + "," + age + "," + dateStr + "," + data[2]);
+                w.println(d[0] + "," + d[1] + "," + age + "," + dateStr + "," + d[2]);
             }
         }
-        System.out.println("✅ Defect Age Report generated: " + fileName);
     }
 }
