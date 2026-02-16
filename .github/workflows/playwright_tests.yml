@@ -143,32 +143,31 @@ jobs:
           mkdir -p /tmp/allure_history_safe
           cp regression-report/history/history.json /tmp/allure_history_safe/ || echo "No history file to backup"
 
-      - name: 7. Run Regression (Fresh Start)
+      - name: 7. Run Regression (Absolute Isolation)
         id: reg_run
         continue-on-error: true
         run: |
-          # 3. PHYSICAL DELETE of the results folder to kill any ghosts
-          rm -rf target/allure-results
-          mkdir -p target/allure-results
-          
-          # 4. Run tests - creates fresh environment.properties and result JSONs
+          # Use a DIFFERENT results directory name to kill all ghosts
           xvfb-run --auto-servernum -- mvn clean test \
             -Denv=${{ github.event.inputs.env || 'qa' }} \
             -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
-            -Dcucumber.filter.tags="@regression"
+            -Dcucumber.filter.tags="@regression" \
+            -Dallure.results.directory=target/regression-results
 
       - name: 8. Generate Pure Regression Report
         if: always()
         run: |
-          # 5. Restore ONLY the history.json into the fresh target
-          mkdir -p target/allure-results/history
-          cp /tmp/allure_history_safe/history.json target/allure-results/history/ || echo "No history to restore"
+          # 1. Restore ONLY history.json into the NEW folder
+          mkdir -p target/regression-results/history
+          cp /tmp/allure_history_safe/history.json target/regression-results/history/ || echo "No history"
           
-          # 6. Run Defect Age (it will see fresh results + history.json)
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          # 2. Run Defect Age on the NEW folder
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
+            -Dexec.args="target/regression-results" \
+            -Dexec.classpathScope=test
           
-          # 7. Generate Allure HTML (will now be 100% pure Regression)
-          allure generate target/allure-results -o allure-report-regression --clean
+          # 3. Generate Allure from the NEW folder
+          allure generate target/regression-results -o allure-report-regression --clean
 
       - name: 9. Detect Latest Locator JSON
         if: always()
