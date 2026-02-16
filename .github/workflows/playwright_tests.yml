@@ -139,7 +139,11 @@ jobs:
         id: reg_run
         continue-on-error: true
         run: |
-          # 'mvn clean' is needed for fresh Env Config, but it wipes the target folder
+          # 1. Force delete the results folder to ensure NO smoke data survives
+          rm -rf target/allure-results
+          mkdir -p target/allure-results
+          
+          # 2. Run tests (This will generate fresh environment.properties and JSONs)
           xvfb-run --auto-servernum -- mvn clean test \
             -Denv=${{ github.event.inputs.env || 'qa' }} \
             -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
@@ -148,12 +152,14 @@ jobs:
       - name: 8. Generate Regression Reports
         if: always()
         run: |
-          # RESTORE history from /tmp into the new target folder created by mvn test
+          # 3. ONLY restore the history files (don't restore old smoke result JSONs)
           mkdir -p target/allure-results/history
-          cp -r /tmp/history_backup/* target/allure-results/history/ || echo "No backup to restore"
+          cp -r /tmp/history_backup/*.json target/allure-results/history/ 2>/dev/null || echo "No history files found"
           
-          # Now run Defect Age (it will see the history) and Allure
+          # 4. Generate CSV (it sees fresh results + restored history)
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          
+          # 5. Generate Report (Will ONLY show regression tests now)
           allure generate target/allure-results -o allure-report-regression --clean
 
       - name: 9. Detect Latest Locator JSON
