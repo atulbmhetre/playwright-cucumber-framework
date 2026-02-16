@@ -116,12 +116,20 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
+          # hard clean run artifacts before execution
+          rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
+          mkdir -p target/allure-results
+
+          # enforce tag source at both env and system property level
+          export CUCUMBER_FILTER_TAGS="$TAGS"
+          echo "Using tags: $CUCUMBER_FILTER_TAGS"
+
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
             -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=$THREADCOUNT \
-            -Dcucumber.filter.tags="$TAGS"
+            -Dcucumber.filter.tags="$CUCUMBER_FILTER_TAGS"
 
       # 1️⃣1️⃣ Write current run environment to Allure
       - name: Write Allure Environment Info
@@ -152,7 +160,7 @@ jobs:
       # 1️⃣4️⃣ Set timestamp for report
       - name: Set Timestamp for Report
         id: timestamp
-        run: echo "REPORT_TS=smoke-$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+        run: echo "REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
 
       # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
@@ -363,12 +371,20 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
+          # hard clean run artifacts before execution
+          rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
+          mkdir -p target/allure-results
+
+          # enforce tag source at both env and system property level
+          export CUCUMBER_FILTER_TAGS="$TAGS"
+          echo "Using tags: $CUCUMBER_FILTER_TAGS"
+
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
             -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=$THREADCOUNT \
-            -Dcucumber.filter.tags="$TAGS"
+            -Dcucumber.filter.tags="$CUCUMBER_FILTER_TAGS"
 
       # 1️⃣1️⃣ Write current run environment to Allure
       - name: Write Allure Environment Info
@@ -399,7 +415,7 @@ jobs:
       # 1️⃣4️⃣ Set timestamp for report
       - name: Set Timestamp for Report
         id: timestamp
-        run: echo "REPORT_TS=regression-$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+        run: echo "REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
 
       # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
