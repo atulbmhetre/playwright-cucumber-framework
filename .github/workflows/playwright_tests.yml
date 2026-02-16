@@ -12,11 +12,11 @@ on:
         type: choice
         options: [smoke, regression]
       env:
-        description: "Environment (Mandatory)"
+        description: "Environment"
         required: true
         default: "qa"
       browser:
-        description: "Browser (Mandatory)"
+        description: "Browser"
         required: true
         default: "chromium"
 
@@ -25,125 +25,104 @@ jobs:
     if: github.event_name == 'push' || github.event.inputs.suite == 'smoke'
     runs-on: ubuntu-latest
     steps:
-      # 0️⃣ Mandatory input check
-      - name: Validate Inputs
-        run: |
-          if [ -z "${{ github.event.inputs.env }}" ] && [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "ERROR: 'env' is mandatory." && exit 1
-          fi
-
       # 1️⃣ Checkout Code
-      - name: Checkout Repository
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # 2️⃣ Setup Java 21
-      - name: Setup Java 21
+      - name: 2. Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
           cache: 'maven'
 
-      # 3️⃣ Install Allure CLI
-      - name: Install Allure CLI
-        run: |
-          wget https://github.com
-          tar -zxvf allure-2.27.0.tgz
-          sudo mv allure-2.27.0 /opt/allure
-          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
-
-      # 4️⃣ Fetch History for Defect Age
-      - name: Fetch Previous History
+      # 3️⃣ Fetch History from gh-pages (For Defect Age)
+      - name: 3. Restore Allure History
         continue-on-error: true
         run: |
           git fetch origin gh-pages
           git checkout origin/gh-pages -- history
           mkdir -p target/allure-results/history
-          cp -r history/* target/allure-results/history/ || echo "No history found"
+          cp -r history/* target/allure-results/history/ || echo "No previous history"
 
-      # 5️⃣ Install Playwright Browsers
-      - name: Install Playwright
+      # 4️⃣ Install Playwright
+      - name: 4. Install Playwright Browsers
         run: mvn playwright:install
 
-      # 6️⃣ Run Smoke Suite
-      - name: Run Smoke Tests
+      # 5️⃣ Run Smoke Suite
+      - name: 5. Run Smoke Tests
         id: run_tests
+        continue-on-error: true
         run: |
           mvn test -Dgroups=smoke \
           -Denv=${{ github.event.inputs.env || 'qa' }} \
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }}
 
-      # 7️⃣ Set Report Timestamp
-      - name: Set Timestamp
-        if: always()
-        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
-
-      # 8️⃣ Generate Defect Age CSV
-      - name: Generate Defect Age Report
+      # 6️⃣ Generate Defect Age CSV
+      - name: 6. Generate Defect Age Report
         if: always()
         run: |
           mvn test-compile exec:java \
           -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
           -Dexec.classpathScope=test
 
-      # 9️⃣ Generate Allure HTML Report
-      - name: Generate Allure Report
+      # 7️⃣ Generate Allure Report (Using Official Action - No wget needed)
+      - name: 7. Generate Allure Report
         if: always()
-        run: allure generate target/allure-results -o allure-report --clean
+        uses: simple-elf/allure-report-action@master
+        with:
+          allure_results: target/allure-results
+          allure_report: allure-report
+          allure_history: history
+          keep_histories: 20
 
-      # 🔟 Identify Latest Failed Locator JSON
-      - name: Detect Latest Locator File
+      # 8️⃣ Detect Latest Failed Locator JSON
+      - name: 8. Detect Latest Locator
         if: always()
         run: |
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then echo "LOCATOR_FILE=$FILE" >> $GITHUB_ENV; fi
 
-      # 1️⃣1️⃣ Upload All Artifacts for Traceability
-      - name: Archive Run Data
+      # 9️⃣ Upload All Artifacts
+      - name: 9. Archive Traceability Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Smoke_Traceability_${{ env.REPORT_TS }}
+          name: Smoke_Run_Data_${{ github.run_number }}
           path: |
             target/defect-age-report.csv
             ${{ env.LOCATOR_FILE }}
-            allure-report
 
-      # 1️⃣2️⃣ Publish to GitHub Pages
-      - name: Deploy Report to Web
+      # 🔟 Publish to GitHub Pages
+      - name: 10. Deploy Report to GH-Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
-          destination_dir: reports/smoke-${{ env.REPORT_TS }}
+
+      # 1️⃣1️⃣ Fail build if tests failed
+      - name: 11. Final Status Check
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
 
   regression-tests:
     needs: smoke-tests
     if: always() && (needs.smoke-tests.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
     runs-on: ubuntu-latest
     steps:
-      # (Steps 1-5 same as Smoke - abbreviated for clarity but necessary in YAML)
-      - name: Checkout and Setup
+      - name: 1. Checkout & Setup (Abbreviated)
         uses: actions/checkout@v4
-      - name: Setup Java
+      - name: 2. Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      # 6️⃣ Run Regression Suite
-      - name: Run Regression Tests
+      - name: 3. Run Regression
         run: |
           mvn test -Dgroups=regression \
           -Denv=${{ github.event.inputs.env }} \
           -Dbrowser=${{ github.event.inputs.browser }}
-
-      # 7️⃣-🔟 (All reporting/upload steps same as Smoke but for Regression)
-      - name: Final Reporting
-        if: always()
-        run: |
-          mvn test-compile exec:java -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge -Dexec.classpathScope=test
-          # (Add Allure Generate / Publish steps here)
