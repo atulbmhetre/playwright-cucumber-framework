@@ -189,7 +189,7 @@ jobs:
           fi
 
       - name: Display Report URL
-        run:
+        run: |
           echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
 
       - name: Fail job if tests failed
