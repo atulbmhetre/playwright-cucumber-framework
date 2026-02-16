@@ -132,51 +132,55 @@ jobs:
           mkdir -p target/allure-results/history
           cp -r regression-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: 6. Run Regression Tests
+      - name: 6. Restore & Backup History
+        continue-on-error: true
+        run: |
+          git fetch origin gh-pages
+          # Get history from the specific regression folder only
+          git checkout origin/gh-pages -- regression-report/history || echo "No regression history"
+          mkdir -p /tmp/reg_history_safe
+          cp regression-report/history/history.json /tmp/reg_history_safe/ 2>/dev/null || echo "No history.json"
+
+      - name: 7. Run Regression Tests
         id: reg_run
         continue-on-error: true
         run: |
+          # 1. PHYSICAL DELETE of all old results to kill ghosts
+          rm -rf target/allure-results
+          mkdir -p target/allure-results
+          # 2. Run Tests
           xvfb-run --auto-servernum -- mvn clean test \
-          -Denv=${{ github.event.inputs.env || 'qa' }} \
-          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
-          -Dcucumber.filter.tags="@regression"
+            -Denv=${{ github.event.inputs.env || 'qa' }} \
+            -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+            -Dcucumber.filter.tags="@regression"
 
-      - name: 7. Generate Isolated Regression Reports
+      - name: 8. Generate Regression Reports
         if: always()
         run: |
-          # 1. Create a 100% clean sandbox for Regression
-          mkdir -p /tmp/regression_sandbox/history
+          # 3. Put ONLY history.json back (No result JSONs)
+          mkdir -p target/allure-results/history
+          cp /tmp/reg_history_safe/history.json target/allure-results/history/ || echo "No history restored"
           
-          # 2. Copy ONLY current Regression JSON results (no environment yet)
-          cp target/allure-results/*-result.json /tmp/regression_sandbox/ 2>/dev/null || true
-          cp target/allure-results/environment.properties /tmp/regression_sandbox/ 2>/dev/null || true
-          
-          # 3. Restore ONLY the history.json (the one we backed up in step 5)
-          cp /tmp/history_backup/history.json /tmp/regression_sandbox/history/ 2>/dev/null || cp /tmp/history_backup/regression-report/history/history.json /tmp/regression_sandbox/history/ 2>/dev/null || echo "No history to restore"
-          
-          # 4. Generate Defect Age CSV (it still looks at target/allure-results)
+          # 4. Generate CSV and Allure
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          
-          # 5. Generate Allure Report FROM THE CLEAN SANDBOX
-          allure generate /tmp/regression_sandbox -o allure-report-regression --clean
+          allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: 8. Archive Regression Data
+      - name: 9. Detect and Archive Regression Data
+        if: always()
+        run: |
+          # Find latest failed locator JSON specifically for this run
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          echo "REG_LOCATOR=$FILE" >> $GITHUB_ENV
+
+      - name: 10. Upload Final Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Regression_Data_Run_${{ github.run_number }}
           path: |
             target/defect-age-report_*.csv
+            ${{ env.REG_LOCATOR }}
             allure-report-regression
-
-      - name: 10. Deploy Regression to Isolated Folder
-        if: always()
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report-regression
-          destination_dir: regression-report
-          keep_files: true
 
       - name: 11. Status Check
         if: steps.reg_run.outcome == 'failure'
