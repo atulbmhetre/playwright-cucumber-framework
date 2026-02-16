@@ -165,14 +165,18 @@ jobs:
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: 9. Detect and Archive Regression Data
+      - name: 9. Detect Latest Locator JSON
         if: always()
         run: |
-          # Find latest failed locator JSON specifically for this run
+          # Finds the latest timestamped failed locator JSON specifically for Regression
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
-          echo "REG_LOCATOR=$FILE" >> $GITHUB_ENV
+          if [ -n "$FILE" ]; then 
+            echo "REG_LOCATOR=$FILE" >> $GITHUB_ENV
+          else
+            echo "No failed locators found."
+          fi
 
-      - name: 10. Upload Final Artifacts
+      - name: 10. Archive Regression Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -182,6 +186,17 @@ jobs:
             ${{ env.REG_LOCATOR }}
             allure-report-regression
 
-      - name: 11. Status Check
+      - name: 11. Publish Regression to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report-regression
+          destination_dir: regression-report
+          keep_files: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+
+      - name: 12. Regression Status Check
         if: steps.reg_run.outcome == 'failure'
         run: exit 1
