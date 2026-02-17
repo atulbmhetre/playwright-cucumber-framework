@@ -20,30 +20,52 @@ on:
 jobs:
   smoke-job:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
-        with: { java-version: '21', distribution: 'temurin', cache: 'maven' }
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
       - run: npm install -g allure-commandline && npx playwright install --with-deps
 
-      - name: Restore History
+      - name: Restore Smoke History
         continue-on-error: true
         run: |
           git fetch origin gh-pages
-          git checkout origin/gh-pages -- smoke-report/history || echo "No history"
           mkdir -p target/allure-results/history
-          cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
+          git checkout origin/gh-pages -- allure-history/smoke/history || echo "No history"
+          cp -r allure-history/smoke/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: Run Tests
+      - name: Run Smoke Tests
         id: run
         continue-on-error: true
-        run: xvfb-run --auto-servernum -- mvn test -Denv=${{ github.event.inputs.env || 'qa' }} -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} -Dcucumber.filter.tags="@smoke"
+        run: |
+          xvfb-run --auto-servernum -- mvn test \
+          -Denv=${{ github.event.inputs.env || 'qa' }} \
+          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+          -Dcucumber.filter.tags="@smoke"
 
       - name: Generate Report
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
+
+      - name: Save Smoke History
+        if: always()
+        run: |
+          mkdir -p allure-history/smoke
+          cp -r allure-report-smoke/history allure-history/smoke/
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add allure-history/smoke/history
+          git commit -m "Update smoke history" || echo "No changes"
+          git push origin HEAD:gh-pages
 
       - name: Archive
         if: always()

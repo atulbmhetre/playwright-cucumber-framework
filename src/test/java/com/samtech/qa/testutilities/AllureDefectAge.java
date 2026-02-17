@@ -2,64 +2,125 @@ package com.samtech.qa.testutilities;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class AllureDefectAge {
+
+    private static final String RESULTS_PATH = "target/allure-results";
+
     public static void main(String[] args) throws IOException {
-        // Matches your POM: target/allure-results
-        String path = "target/allure-results";
-        File folder = new File(path);
-        if (!folder.exists()) return;
+
+        File folder = new File(RESULTS_PATH);
+        if (!folder.exists()) {
+            System.out.println("No allure-results folder found.");
+            return;
+        }
 
         ObjectMapper mapper = new ObjectMapper();
-        File[] files = folder.listFiles((d, n) -> n.endsWith("-result.json"));
-        if (files == null) return;
+        File[] files = folder.listFiles((dir, name) -> name.endsWith("-result.json"));
+        if (files == null || files.length == 0) {
+            System.out.println("No result files found.");
+            return;
+        }
 
         Map<String, String[]> defects = new HashMap<>();
-        for (File f : files) {
-            JsonNode r = mapper.readTree(f);
-            if (r.path("status").asText("").matches("failed|broken")) {
-                String id = r.path("historyId").asText("unknown");
-                defects.put(id, new String[]{
-                        r.path("fullName").asText("N/A"),
-                        r.path("name").asText("N/A"),
-                        r.path("statusDetails").path("message").asText("No Msg").replace(",", ";").replace("\n", " "),
-                        String.valueOf(r.path("start").asLong(0))
+
+        for (File file : files) {
+            JsonNode result = mapper.readTree(file);
+
+            String status = result.path("status").asText("");
+            if (status.equals("failed") || status.equals("broken")) {
+
+                String historyId = result.path("historyId").asText("unknown");
+                String className = result.path("fullName").asText("N/A");
+                String testName = result.path("name").asText("N/A");
+                String errorMsg = result.path("statusDetails")
+                        .path("message")
+                        .asText("No Message")
+                        .replace(",", ";")
+                        .replace("\n", " ");
+
+                long startTime = result.path("start").asLong(0);
+
+                defects.put(historyId, new String[]{
+                        className,
+                        testName,
+                        errorMsg,
+                        String.valueOf(startTime)
                 });
             }
         }
 
-        File hf = new File(path + "/history/history.json");
-        JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        File historyFile = new File(RESULTS_PATH + "/history/history.json");
+        JsonNode historyRoot = historyFile.exists() ? mapper.readTree(historyFile) : null;
 
-        try (PrintWriter w = new PrintWriter(new FileWriter("target/defect-age-report.csv"))) {
-            w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
-            for (var entry : defects.entrySet()) {
+        DateTimeFormatter formatter =
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+        File output = new File("target/defect-age-report.csv");
+
+        try (PrintWriter writer = new PrintWriter(new FileWriter(output))) {
+
+            writer.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
+
+            for (Map.Entry<String, String[]> entry : defects.entrySet()) {
+
+                String historyId = entry.getKey();
+                String[] data = entry.getValue();
+
                 int age = 1;
-                String[] d = entry.getValue();
-                long firstFailTime = Long.parseLong(d[3]);
-                if (hr != null && hr.has(entry.getKey())) {
-                    JsonNode items = hr.get(entry.getKey()).path("items");
+                long firstFailureTime = Long.parseLong(data[3]);
+
+                if (historyRoot != null && historyRoot.has(historyId)) {
+
+                    JsonNode items = historyRoot.get(historyId).path("items");
+
                     for (JsonNode item : items) {
-                        if (item.path("status").asText("").matches("failed|broken")) {
+                        String itemStatus = item.path("status").asText("");
+
+                        if (itemStatus.equals("failed") || itemStatus.equals("broken")) {
                             age++;
-                            firstFailTime = item.path("time").path("start").asLong(firstFailTime);
-                        } else break;
+                            firstFailureTime =
+                                    item.path("time")
+                                            .path("start")
+                                            .asLong(firstFailureTime);
+                        } else {
+                            break;
+                        }
                     }
                 }
-                String date = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
-                w.println(d[0] + "," + d[1] + "," + age + "," + date + "," + d[2]);
+
+                String formattedDate =
+                        LocalDateTime.ofInstant(
+                                Instant.ofEpochMilli(firstFailureTime),
+                                ZoneId.systemDefault()
+                        ).format(formatter);
+
+                writer.println(
+                        data[0] + "," +
+                                data[1] + "," +
+                                age + "," +
+                                formattedDate + "," +
+                                data[2]
+                );
             }
         }
 
+        // Environment Properties
         Properties props = new Properties();
-        props.setProperty("Build_ID", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
-        try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
-            props.store(fos, "Allure Env");
+        props.setProperty("Build_ID",
+                Optional.ofNullable(System.getenv("GITHUB_RUN_NUMBER"))
+                        .orElse("Local"));
+
+        try (FileOutputStream fos =
+                     new FileOutputStream(RESULTS_PATH + "/environment.properties")) {
+            props.store(fos, "Allure Environment");
         }
+
+        System.out.println("Defect age report generated successfully.");
     }
 }
