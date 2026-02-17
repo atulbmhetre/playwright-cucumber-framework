@@ -30,18 +30,21 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - run: npm install -g allure-commandline && npx playwright install --with-deps
+      - name: Install Allure & Playwright
+        run: |
+          npm install -g allure-commandline
+          npx playwright install --with-deps
 
-      # Restore History
-      - name: Restore History
+      # ✅ Restore Smoke History
+      - name: Restore Smoke History
         continue-on-error: true
         run: |
-          git fetch origin gh-pages || echo "No gh-pages yet"
-          git checkout origin/gh-pages -- smoke-report/history || echo "No history found"
+          git fetch origin gh-pages || echo "No gh-pages branch yet"
+          git checkout origin/gh-pages -- smoke-report/history || echo "No smoke history found"
           mkdir -p target/allure-results/history
           cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      # Run Tests
+      # ✅ Run Smoke Tests
       - name: Run Smoke Tests
         id: run
         continue-on-error: true
@@ -51,15 +54,15 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
-      # Generate Environment + Defect Age + Report
-      - name: Generate Report
+      # ✅ Generate Environment + Defect Age + Report
+      - name: Generate Allure Data
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureEnvironmentManager" -Dexec.classpathScope=test
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
-      # Prepare Build Folder
+      # ✅ Prepare Build Artifacts Folder
       - name: Prepare Build Artifacts
         if: always()
         run: |
@@ -69,7 +72,7 @@ jobs:
           cp target/defect-age-report.csv build-${{ github.run_number }}/ || true
           cp test-output/failedLocators_*.json build-${{ github.run_number }}/ || true
 
-      # Upload Artifacts
+      # ✅ Upload Artifacts
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,16 +80,23 @@ jobs:
           name: Smoke_Build_${{ github.run_number }}
           path: build-${{ github.run_number }}
 
-      # Deploy to gh-pages
-      - name: Deploy Report
+      # ✅ Create Root Redirect (Auto-open smoke)
+      - name: Create Root Redirect
+        if: always()
+        run: |
+          echo '<meta http-equiv="refresh" content="0; url=smoke-report/">' > index.html
+
+      # ✅ Deploy to GitHub Pages
+      - name: Deploy Smoke Report
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report-smoke
-          destination_dir: smoke-report
+          publish_dir: .
+          destination_dir: .
           keep_files: true
 
+      # ✅ Final Status Control
       - name: Final Status
         if: always()
         run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}

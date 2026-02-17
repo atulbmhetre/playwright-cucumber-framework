@@ -1,9 +1,6 @@
 name: Regression Tests Execution
 
 on:
-  workflow_run:
-    workflows: ["Smoke Tests Execution"]
-    types: [completed]
   workflow_dispatch:
 
 jobs:
