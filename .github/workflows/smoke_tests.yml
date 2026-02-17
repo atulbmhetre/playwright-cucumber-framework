@@ -44,7 +44,7 @@ jobs:
           mkdir -p target/allure-results/history
           cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      # ✅ Run Smoke Tests only
+      # ✅ Run Smoke Tests
       - name: Run Smoke Tests
         id: run
         continue-on-error: true
