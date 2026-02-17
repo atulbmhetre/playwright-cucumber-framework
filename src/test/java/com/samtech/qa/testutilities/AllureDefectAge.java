@@ -9,19 +9,14 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
-        // Step 1: Set Results Path (Default or Argument)
         String path = (args.length > 0) ? args[0] : "target/allure-results";
         File folder = new File(path);
-        if (!folder.exists()) {
-            System.out.println("No allure results found at: " + path);
-            return;
-        }
+        if (!folder.exists()) return;
 
         ObjectMapper mapper = new ObjectMapper();
         File[] files = folder.listFiles((d, n) -> n.endsWith("-result.json"));
         if (files == null) return;
 
-        // Step 2: Extract current failures
         Map<String, String[]> defects = new HashMap<>();
         for (File f : files) {
             JsonNode r = mapper.readTree(f);
@@ -36,30 +31,24 @@ public class AllureDefectAge {
             }
         }
 
-        // Step 3: Compare with History
         File hf = new File(path + "/history/history.json");
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String csvName = "target/defect-age-report_" + ts + ".csv";
-
-        try (PrintWriter w = new PrintWriter(new FileWriter(csvName))) {
+        try (PrintWriter w = new PrintWriter(new FileWriter("target/defect-age-report.csv"))) {
             w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
             for (var entry : defects.entrySet()) {
                 int age = 1;
                 String[] d = entry.getValue();
                 long firstFailTime = Long.parseLong(d[3]);
-
                 if (hr != null && hr.has(entry.getKey())) {
-                    JsonNode historyNode = hr.get(entry.getKey());
-                    if (historyNode.has("items")) {
-                        for (JsonNode item : historyNode.get("items")) {
-                            if (item.path("status").asText("").matches("failed|broken")) {
-                                age++;
-                                firstFailTime = item.path("time").path("start").asLong(firstFailTime);
-                            } else break;
-                        }
+                    JsonNode items = hr.get(entry.getKey()).path("items");
+                    for (JsonNode item : items) {
+                        if (item.path("status").asText("").matches("failed|broken")) {
+                            age++;
+                            firstFailTime = item.path("time").path("start").asLong(firstFailTime);
+                        } else break;
                     }
                 }
                 String date = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
@@ -67,13 +56,12 @@ public class AllureDefectAge {
             }
         }
 
-        // Step 4: Inject into Allure Environment UI
+        // Dashboard Injector
         Properties props = new Properties();
-        props.setProperty("Total_Defects_Found", String.valueOf(defects.size()));
-        props.setProperty("Last_Run_Time", ts);
+        props.setProperty("Defects_Count", String.valueOf(defects.size()));
+        props.setProperty("Execution_Time", ts);
         try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
-            props.store(fos, "Allure Dashboard Data");
+            props.store(fos, "Allure Env");
         }
-        System.out.println("Successfully generated Defect Age report and environment properties.");
     }
 }
