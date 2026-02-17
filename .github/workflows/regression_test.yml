@@ -5,27 +5,25 @@ on:
 
 jobs:
   regression-job:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout main branch
       - name: Checkout Main
         uses: actions/checkout@v4
 
-      - name: Checkout gh-pages
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
-        continue-on-error: true
-
+      # 2️⃣ Setup Java
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - run: npm install -g allure-commandline && npx playwright install --with-deps
+      # 3️⃣ Install Allure CLI + Playwright dependencies
+      - run: |
+          npm install -g allure-commandline
+          npx playwright install --with-deps
 
+      # 4️⃣ Restore Regression History (if any)
       - name: Restore Regression History
         run: |
           mkdir -p target/allure-results/history
@@ -33,29 +31,22 @@ jobs:
             cp -r gh-pages/allure-history/regression/history/* target/allure-results/history/
           fi
 
+      # 5️⃣ Run Regression Tests only
       - name: Run Regression
         id: run
         continue-on-error: true
-        run: xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
+        run: |
+          xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
 
+      # 6️⃣ Generate Defect Age + Allure Report
       - name: Generate Defect Age + Report
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: Update gh-pages Content
-        if: always()
-        run: |
-          mkdir -p gh-pages/regression-report
-          mkdir -p gh-pages/allure-history/regression
-
-          rm -rf gh-pages/regression-report/*
-          cp -r allure-report-regression/* gh-pages/regression-report/
-          rm -rf gh-pages/allure-history/regression/history
-          cp -r allure-report-regression/history gh-pages/allure-history/regression/
-
-      - name: Deploy to gh-pages
+      # 7️⃣ Deploy Regression Report to gh-pages
+      - name: Deploy Regression Report
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -64,6 +55,15 @@ jobs:
           destination_dir: regression-report
           keep_files: false
 
+      # 8️⃣ Save Regression History for next run
+      - name: Backup Regression History
+        if: always()
+        run: |
+          mkdir -p gh-pages/allure-history/regression
+          rm -rf gh-pages/allure-history/regression/history
+          cp -r allure-report-regression/history gh-pages/allure-history/regression/
+
+      # 9️⃣ Exit with test status
       - name: Final Status
         if: always()
         run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}
