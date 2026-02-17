@@ -5,10 +5,6 @@ on:
     workflows: ["Smoke Tests Execution"]
     types: [completed]
   workflow_dispatch:
-    inputs:
-      env:
-        default: "qa"
-        type: string
 
 jobs:
   regression-job:
@@ -16,7 +12,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Main
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
 
       - uses: actions/setup-java@v4
         with:
@@ -26,54 +30,41 @@ jobs:
       - run: npm install -g allure-commandline && npx playwright install --with-deps
 
       - name: Restore Regression History
-        continue-on-error: true
         run: |
-          git fetch origin gh-pages
           mkdir -p target/allure-results/history
-          git checkout origin/gh-pages -- allure-history/regression/history || echo "No history"
-          cp -r allure-history/regression/history/* target/allure-results/history/ 2>/dev/null || true
+          if [ -d gh-pages/allure-history/regression/history ]; then
+            cp -r gh-pages/allure-history/regression/history/* target/allure-results/history/
+          fi
 
       - name: Run Regression
         id: run
         continue-on-error: true
         run: xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
 
-      - name: Generate Report
+      - name: Generate Defect Age + Report
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: Save Regression History
+      - name: Update gh-pages Content
         if: always()
         run: |
-          mkdir -p allure-history/regression
-          cp -r allure-report-regression/history allure-history/regression/
+          mkdir -p gh-pages/regression-report
+          mkdir -p gh-pages/allure-history/regression
 
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add allure-history/regression/history
-          git commit -m "Update regression history" || echo "No changes"
-          git push origin HEAD:gh-pages
+          rm -rf gh-pages/regression-report/*
+          cp -r allure-report-regression/* gh-pages/regression-report/
+          rm -rf gh-pages/allure-history/regression/history
+          cp -r allure-report-regression/history gh-pages/allure-history/regression/
 
-      - name: Archive Data
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Regression_Data_Build_${{ github.run_number }}
-          path: |
-            target/defect-age-report.csv
-            test-output/failedLocators_*.json
-            target/allure-results
-            allure-report-regression
-
-      - name: Deploy Report
+      - name: Deploy to gh-pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report-regression
-          destination_dir: regression-report
+          publish_dir: gh-pages
+          publish_branch: gh-pages
           keep_files: true
 
       - name: Final Status

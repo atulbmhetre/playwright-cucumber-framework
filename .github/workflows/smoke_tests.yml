@@ -22,7 +22,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Main
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
 
       - uses: actions/setup-java@v4
         with:
@@ -33,12 +41,11 @@ jobs:
       - run: npm install -g allure-commandline && npx playwright install --with-deps
 
       - name: Restore Smoke History
-        continue-on-error: true
         run: |
-          git fetch origin gh-pages
           mkdir -p target/allure-results/history
-          git checkout origin/gh-pages -- allure-history/smoke/history || echo "No history"
-          cp -r allure-history/smoke/history/* target/allure-results/history/ 2>/dev/null || true
+          if [ -d gh-pages/allure-history/smoke/history ]; then
+            cp -r gh-pages/allure-history/smoke/history/* target/allure-results/history/
+          fi
 
       - name: Run Smoke Tests
         id: run
@@ -49,42 +56,30 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
-      - name: Generate Report
+      - name: Generate Defect Age + Report
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
-      - name: Save Smoke History
+      - name: Update gh-pages Content
         if: always()
         run: |
-          mkdir -p allure-history/smoke
-          cp -r allure-report-smoke/history allure-history/smoke/
+          mkdir -p gh-pages/smoke-report
+          mkdir -p gh-pages/allure-history/smoke
 
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add allure-history/smoke/history
-          git commit -m "Update smoke history" || echo "No changes"
-          git push origin HEAD:gh-pages
+          rm -rf gh-pages/smoke-report/*
+          cp -r allure-report-smoke/* gh-pages/smoke-report/
+          rm -rf gh-pages/allure-history/smoke/history
+          cp -r allure-report-smoke/history gh-pages/allure-history/smoke/
 
-      - name: Archive
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Smoke_Data_Build_${{ github.run_number }}
-          path: |
-            target/defect-age-report.csv
-            test-output/failedLocators_*.json
-            target/allure-results
-            allure-report-smoke
-
-      - name: Deploy
+      - name: Deploy to gh-pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report-smoke
-          destination_dir: smoke-report
+          publish_dir: gh-pages
+          publish_branch: gh-pages
           keep_files: true
 
       - name: Final Status
