@@ -9,10 +9,12 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
-        // Use argument if provided (e.g., target/regression-results)
         String path = (args.length > 0) ? args[0] : "target/allure-results";
         File folder = new File(path);
-        if (!folder.exists()) return;
+        if (!folder.exists()) {
+            System.out.println("Path not found: " + path);
+            return;
+        }
 
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String fileName = "target/defect-age-report_" + ts + ".csv";
@@ -24,7 +26,8 @@ public class AllureDefectAge {
         Map<String, String[]> defects = new HashMap<>();
         for (File f : files) {
             JsonNode r = mapper.readTree(f);
-            if (r.path("status").asText("").matches("failed|broken")) {
+            String status = r.path("status").asText("");
+            if (status.matches("failed|broken")) {
                 String id = r.path("historyId").asText("unknown");
                 defects.put(id, new String[]{
                         r.path("fullName").asText("N/A"),
@@ -46,19 +49,32 @@ public class AllureDefectAge {
                 String[] d = entry.getValue();
                 long firstFailTime = Long.parseLong(d[3]);
                 if (hr != null && hr.has(entry.getKey())) {
-                    List<JsonNode> items = new ArrayList<>();
-                    hr.get(entry.getKey()).path("items").forEach(items::add);
-                    items.sort((a, b) -> Long.compare(b.path("time").path("stop").asLong(0), a.path("time").path("stop").asLong(0)));
-                    for (JsonNode item : items) {
-                        if (item.path("status").asText("").matches("failed|broken")) {
-                            age++;
-                            firstFailTime = item.path("time").path("start").asLong(firstFailTime);
-                        } else break;
+                    JsonNode historyItem = hr.get(entry.getKey());
+                    // Allure history items are in 'items' array
+                    if (historyItem.has("items")) {
+                        for (JsonNode item : historyItem.get("items")) {
+                            if (item.path("status").asText("").matches("failed|broken")) {
+                                age++;
+                                firstFailTime = item.path("time").path("start").asLong(firstFailTime);
+                            } else {
+                                break;
+                            }
+                        }
                     }
                 }
                 String date = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
                 w.println(d[0] + "," + d[1] + "," + age + "," + date + "," + d[2]);
             }
         }
+
+        // AUTO-INJECT INTO ALLURE DASHBOARD
+        Properties props = new Properties();
+        props.setProperty("Total_Defects", String.valueOf(defects.size()));
+        props.setProperty("Last_Run_Timestamp", ts);
+        try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
+            props.store(fos, "Allure Environment");
+        }
+
+        System.out.println("Defect Age Report Generated: " + fileName);
     }
 }
