@@ -9,13 +9,10 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
-        // Step 1: Detect result path (handles POM-forced and custom folders)
+        // Use target/allure-results as default to match your POM
         String path = (args.length > 0) ? args[0] : "target/allure-results";
         File folder = new File(path);
-        if (!folder.exists()) {
-            System.out.println("Results directory not found at: " + path);
-            return;
-        }
+        if (!folder.exists()) return;
 
         ObjectMapper mapper = new ObjectMapper();
         File[] files = folder.listFiles((d, n) -> n.endsWith("-result.json"));
@@ -35,7 +32,6 @@ public class AllureDefectAge {
             }
         }
 
-        // Step 2: Calculate Age from History
         File hf = new File(path + "/history/history.json");
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -48,13 +44,11 @@ public class AllureDefectAge {
                 long firstFailTime = Long.parseLong(d[3]);
                 if (hr != null && hr.has(entry.getKey())) {
                     JsonNode items = hr.get(entry.getKey()).path("items");
-                    if (items != null) {
-                        for (JsonNode item : items) {
-                            if (item.path("status").asText("").matches("failed|broken")) {
-                                age++;
-                                firstFailTime = item.path("time").path("start").asLong(firstFailTime);
-                            } else break;
-                        }
+                    for (JsonNode item : items) {
+                        if (item.path("status").asText("").matches("failed|broken")) {
+                            age++;
+                            firstFailTime = item.path("time").path("start").asLong(firstFailTime);
+                        } else break;
                     }
                 }
                 String date = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
@@ -62,10 +56,9 @@ public class AllureDefectAge {
             }
         }
 
-        // Step 3: Inject Build Info into Allure UI
+        // Add Build Info to Allure UI
         Properties props = new Properties();
-        props.setProperty("Build_Number", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
-        props.setProperty("Defects_Found", String.valueOf(defects.size()));
+        props.setProperty("Build", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
         try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
             props.store(fos, "Allure Env");
         }

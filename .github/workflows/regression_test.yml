@@ -6,16 +6,10 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
-      env:
-        description: "Environment"
-        required: true
-        default: "qa"
-        type: choice
-        options: [qa, dev, prod]
+      env: { default: "qa", type: string }
 
 jobs:
   regression-job:
-    # Only run if Smoke succeeded OR if manually triggered
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
@@ -24,32 +18,34 @@ jobs:
         with: { java-version: '21', distribution: 'temurin' }
       - run: npm install -g allure-commandline && npx playwright install --with-deps
 
-      - name: Clean & Restore History
+      - name: 1. Nuclear Clean & Restore History
         run: |
-          rm -rf target/allure-results
-          mkdir -p target/regression-results/history
+          # Delete any existing target folders to kill ghosts
+          rm -rf target
+          mkdir -p target/allure-results/history
+          # Pull ONLY history files from the previous regression report
           git fetch origin gh-pages
           git checkout origin/gh-pages -- regression-report/history || echo "No history"
-          cp -r regression-report/history/* target/regression-results/history/ 2>/dev/null || true
+          cp -r regression-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: Run Regression
+      - name: 2. Run Regression
         id: run
         continue-on-error: true
         run: |
-          xvfb-run --auto-servernum -- mvn clean test \
-          -Dcucumber.filter.tags="@regression" \
-          -Dallure.results.directory=target/regression-results
+          # We use the default folder since your POM forces it anyway
+          xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
 
-      - name: Generate Report
+      - name: 3. Generate Report (Consistent Paths)
         if: always()
         run: |
-          # Physically move files just in case POM overrides results path
-          mkdir -p target/regression-results
-          mv target/allure-results/* target/regression-results/ 2>/dev/null || true
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.args="target/regression-results" -Dexec.classpathScope=test
-          allure generate target/regression-results -o allure-report-regression --clean
+          # 1. Run Defect Age on the default folder (matching POM)
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
+            -Dexec.args="target/allure-results" -Dexec.classpathScope=test
+          
+          # 2. Generate Allure from the SAME default folder
+          allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: Archive
+      - name: 4. Archive Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -57,10 +53,10 @@ jobs:
           path: |
             target/defect-age-report.csv
             test-output/failedLocators_*.json
-            target/regression-results
+            target/allure-results
             allure-report-regression
 
-      - name: Deploy
+      - name: 5. Deploy
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -68,7 +64,3 @@ jobs:
           publish_dir: allure-report-regression
           destination_dir: regression-report
           keep_files: true
-
-      - name: Final Status
-        if: always()
-        run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}
