@@ -1,51 +1,74 @@
 name: Regression Tests Execution
-
 on:
   workflow_dispatch:
-
+    inputs:
+      env:
+        description: 'Test environment'
+        default: 'staging'
+      browser:
+        description: 'Browser to run tests'
+        default: 'chrome'
+      headless:
+        description: 'Headless mode'
+        default: 'true'
+      threadcount:
+        description: 'Parallel threads'
+        default: '1'
+      tag:
+        description: 'Cucumber tags'
+        default: '@regression'
 jobs:
   regression-job:
     runs-on: ubuntu-latest
-
     steps:
       # 1️⃣ Checkout main branch
       - name: Checkout Main
         uses: actions/checkout@v4
-
       # 2️⃣ Setup Java
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      # 3️⃣ Install Allure CLI + Playwright dependencies
+      # 3️⃣ Install Allure CLI + Playwright
       - run: |
           npm install -g allure-commandline
           npx playwright install --with-deps
-
-      # 4️⃣ Clean Allure results & Restore Regression History
+      # 4️⃣ Prepare Allure Results & Restore Regression History
       - name: Prepare Allure Results
         run: |
           rm -rf target/allure-results/*
           mkdir -p target/allure-results/history
+
+      - name: Restore Regression History
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Copy Regression History
+        run: |
           if [ -d gh-pages/allure-history/regression/history ]; then
             cp -r gh-pages/allure-history/regression/history/* target/allure-results/history/
           fi
-
-      # 5️⃣ Run Regression Tests only
+      # 5️⃣ Run Regression Tests
       - name: Run Regression
         id: run
         continue-on-error: true
         run: |
-          xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
-
+          xvfb-run --auto-servernum -- mvn clean test \
+            -Dcucumber.filter.tags="${{ github.event.inputs.tag }}" \
+            -Denv="${{ github.event.inputs.env }}" \
+            -Dbrowser="${{ github.event.inputs.browser }}" \
+            -Dheadless="${{ github.event.inputs.headless }}" \
+            -Dthreadcount="${{ github.event.inputs.threadcount }}"
       # 6️⃣ Generate Defect Age + Allure Report
       - name: Generate Defect Age + Report
         if: always()
         run: |
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
+            -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
-
       # 7️⃣ Deploy Regression Report
       - name: Deploy Regression Report
         if: always()
@@ -55,8 +78,18 @@ jobs:
           publish_dir: ./allure-report-regression
           destination_dir: regression-report
           keep_files: false
-
-      # 8️⃣ Backup Regression History for next run
+      # 8️⃣ Upload Artifacts
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: regression-artifacts
+          path: |
+            target/allure-results
+            allure-report-regression
+            defect-age-report.csv
+            failedLocators_*.json
+      # 9️⃣ Backup Regression History
       - name: Backup Regression History
         if: always()
         run: |
@@ -64,7 +97,18 @@ jobs:
           rm -rf gh-pages/allure-history/regression/history
           cp -r allure-report-regression/history gh-pages/allure-history/regression/
 
-      # 9️⃣ Exit with test status
+      - name: Push Regression History to gh-pages
+        if: always()
+        run: |
+          cd gh-pages
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add allure-history/regression/history
+          git diff --cached --quiet || git commit -m "chore: update regression allure history [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 🔟 Exit with test status
       - name: Final Status
         if: always()
         run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}
