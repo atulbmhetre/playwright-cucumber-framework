@@ -91,9 +91,9 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          destination_dir: .
-          keep_files: true
+          publish_dir: ./allure-report-smoke
+          destination_dir: smoke-report
+          keep_files: false
 
       # ✅ Final Status Control
       - name: Final Status
