@@ -18,31 +18,24 @@ jobs:
         with: { java-version: '21', distribution: 'temurin' }
       - run: npm install -g allure-commandline && npx playwright install --with-deps
 
-      - name: 1. Nuclear Clean & Restore History
+      - name: 1. Clean All & Restore ONLY Regression History
         run: |
-          # Delete any existing target folders to kill ghosts
           rm -rf target
           mkdir -p target/allure-results/history
-          # Pull ONLY history files from the previous regression report
           git fetch origin gh-pages
+          # Crucial: Only pull from the regression folder
           git checkout origin/gh-pages -- regression-report/history || echo "No history"
           cp -r regression-report/history/* target/allure-results/history/ 2>/dev/null || true
 
       - name: 2. Run Regression
         id: run
         continue-on-error: true
-        run: |
-          # We use the default folder since your POM forces it anyway
-          xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
+        run: xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression"
 
-      - name: 3. Generate Report (Consistent Paths)
+      - name: 3. Generate Report
         if: always()
         run: |
-          # 1. Run Defect Age on the default folder (matching POM)
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
-            -Dexec.args="target/allure-results" -Dexec.classpathScope=test
-          
-          # 2. Generate Allure from the SAME default folder
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
 
       - name: 4. Archive Data

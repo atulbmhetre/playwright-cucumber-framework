@@ -9,8 +9,8 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
-        // Use target/allure-results as default to match your POM
-        String path = (args.length > 0) ? args[0] : "target/allure-results";
+        // Matches your POM: target/allure-results
+        String path = "target/allure-results";
         File folder = new File(path);
         if (!folder.exists()) return;
 
@@ -56,9 +56,8 @@ public class AllureDefectAge {
             }
         }
 
-        // Add Build Info to Allure UI
         Properties props = new Properties();
-        props.setProperty("Build", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
+        props.setProperty("Build_ID", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
         try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
             props.store(fos, "Allure Env");
         }
