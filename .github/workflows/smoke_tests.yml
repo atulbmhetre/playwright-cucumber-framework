@@ -1,91 +1,52 @@
 name: Smoke Tests Execution
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      env:
-        description: "Environment"
-        required: true
-        default: "qa"
-        type: choice
-        options: [qa, dev, prod]
-      browser:
-        required: true
-        default: "chromium"
-        type: choice
-        options: [chromium, firefox, webkit]
 
 jobs:
   smoke-job:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout main branch
+      - name: Checkout Main
+        uses: actions/checkout@v4
 
+      # 2️⃣ Setup Java
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'maven'
 
-      - name: Install Allure & Playwright
-        run: |
+      # 3️⃣ Install Allure CLI + Playwright dependencies
+      - run: |
           npm install -g allure-commandline
           npx playwright install --with-deps
 
-      # ✅ Restore Smoke History
-      - name: Restore Smoke History
-        continue-on-error: true
+      # 4️⃣ Clean Allure results & Restore Smoke History
+      - name: Prepare Allure Results
         run: |
-          git fetch origin gh-pages || echo "No gh-pages branch yet"
-          git checkout origin/gh-pages -- smoke-report/history || echo "No smoke history found"
+          rm -rf target/allure-results/*
           mkdir -p target/allure-results/history
-          cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
+          if [ -d gh-pages/allure-history/smoke/history ]; then
+            cp -r gh-pages/allure-history/smoke/history/* target/allure-results/history/
+          fi
 
-      # ✅ Run Smoke Tests
-      - name: Run Smoke Tests
+      # 5️⃣ Run Smoke Tests only
+      - name: Run Smoke
         id: run
         continue-on-error: true
         run: |
-          xvfb-run --auto-servernum -- mvn clean test \
-          -Denv=${{ github.event.inputs.env || 'qa' }} \
-          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
-          -Dcucumber.filter.tags="@smoke"
+          xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@smoke"
 
-      # ✅ Generate Environment + Defect Age + Report
-      - name: Generate Allure Data
+      # 6️⃣ Generate Defect Age + Allure Report
+      - name: Generate Defect Age + Report
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
-      # ✅ Prepare Build Artifacts Folder
-      - name: Prepare Build Artifacts
-        if: always()
-        run: |
-          mkdir -p build-${{ github.run_number }}
-          cp -r allure-report-smoke build-${{ github.run_number }}/allure-report
-          cp -r target/allure-results build-${{ github.run_number }}/allure-results
-          cp target/defect-age-report.csv build-${{ github.run_number }}/ || true
-          cp test-output/failedLocators_*.json build-${{ github.run_number }}/ || true
-
-      # ✅ Upload Artifacts
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Smoke_Build_${{ github.run_number }}
-          path: build-${{ github.run_number }}
-
-      # ✅ Create Root Redirect (Auto-open smoke)
-      - name: Create Root Redirect
-        if: always()
-        run: |
-          echo '<meta http-equiv="refresh" content="0; url=smoke-report/">' > index.html
-
-      # ✅ Deploy to GitHub Pages
+      # 7️⃣ Deploy Smoke Report
       - name: Deploy Smoke Report
         if: always()
         uses: peaceiris/actions-gh-pages@v3
@@ -95,7 +56,15 @@ jobs:
           destination_dir: smoke-report
           keep_files: false
 
-      # ✅ Final Status Control
+      # 8️⃣ Backup Smoke History for next run
+      - name: Backup Smoke History
+        if: always()
+        run: |
+          mkdir -p gh-pages/allure-history/smoke
+          rm -rf gh-pages/allure-history/smoke/history
+          cp -r allure-report-smoke/history gh-pages/allure-history/smoke/
+
+      # 9️⃣ Exit with test status
       - name: Final Status
         if: always()
         run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}

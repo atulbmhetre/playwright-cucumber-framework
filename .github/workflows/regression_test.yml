@@ -23,9 +23,10 @@ jobs:
           npm install -g allure-commandline
           npx playwright install --with-deps
 
-      # 4️⃣ Restore Regression History (if any)
-      - name: Restore Regression History
+      # 4️⃣ Clean Allure results & Restore Regression History
+      - name: Prepare Allure Results
         run: |
+          rm -rf target/allure-results/*
           mkdir -p target/allure-results/history
           if [ -d gh-pages/allure-history/regression/history ]; then
             cp -r gh-pages/allure-history/regression/history/* target/allure-results/history/
@@ -45,7 +46,7 @@ jobs:
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
 
-      # 7️⃣ Deploy Regression Report to gh-pages
+      # 7️⃣ Deploy Regression Report
       - name: Deploy Regression Report
         if: always()
         uses: peaceiris/actions-gh-pages@v3
@@ -55,7 +56,7 @@ jobs:
           destination_dir: regression-report
           keep_files: false
 
-      # 8️⃣ Save Regression History for next run
+      # 8️⃣ Backup Regression History for next run
       - name: Backup Regression History
         if: always()
         run: |
