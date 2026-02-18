@@ -5,7 +5,7 @@ on:
     inputs:
       env:
         description: 'Test environment'
-        default: 'staging'
+        default: 'qa'
       browser:
         description: 'Browser to run tests'
         default: 'chrome'
@@ -81,7 +81,7 @@ jobs:
         run: |
           xvfb-run --auto-servernum -- mvn clean test \
             -Dcucumber.filter.tags="${{ github.event.inputs.tag || '@regression' }}" \
-            -Denv="${{ github.event.inputs.env || 'staging' }}" \
+            -Denv="${{ github.event.inputs.env || 'qa' }}" \
             -Dbrowser="${{ github.event.inputs.browser || 'chrome' }}" \
             -Dheadless="${{ github.event.inputs.headless || 'true' }}" \
             -Dthreadcount="${{ github.event.inputs.threadcount || '1' }}"
