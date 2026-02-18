@@ -22,6 +22,13 @@ public class FailedTestRunner extends AbstractTestNGCucumberTests {
     static {
         System.setProperty("isRerun", "true");
     }
+    @BeforeClass
+    public void checkRerunFile() {
+        File rerunFile = new File("target/failed_scenarios.txt");
+        if (!rerunFile.exists() || rerunFile.length() == 0) {
+            throw new SkipException("No failed scenarios to rerun — skipping FailedTestRunner");
+        }
+    }
     @Override
     @DataProvider(parallel = true)
     public Object[][] scenarios() {

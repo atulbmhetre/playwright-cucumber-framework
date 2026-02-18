@@ -5,9 +5,4 @@
             <class name="com.samtech.qa.runners.SmokeTestsRunner"/>
         </classes>
     </test>
-    <test name="Retry Failed Tests">
-        <classes>
-            <class name="com.samtech.qa.runners.FailedTestRunner"/>
-        </classes>
-    </test>
 </suite>
