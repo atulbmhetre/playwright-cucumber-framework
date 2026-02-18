@@ -63,21 +63,10 @@ jobs:
           path: gh-pages
         continue-on-error: true
 
-      - name: Restore Shared History
-        run: |
-          rm -rf target/allure-results
-          mkdir -p target/allure-results/history
-          if [ -d gh-pages/allure-history/shared/history ]; then
-            echo "✅ Shared history found — restoring"
-            cp -r gh-pages/allure-history/shared/history/. target/allure-results/history/
-          else
-            echo "ℹ️  No shared history yet — first run"
-          fi
-
       # ─────────────────────────────────────────
       # 6️⃣  Run Smoke Tests
-      #      FIX: pass only filename, pom.xml already
-      #      has src/test/resources/ as prefix via property
+      #      mvn clean wipes target/ so history
+      #      is restored AFTER tests, before allure generate
       # ─────────────────────────────────────────
       - name: Run Smoke Tests
         id: run
@@ -91,6 +80,17 @@ jobs:
             -Dheadless="${{ github.event.inputs.headless || 'true' }}" \
             -Dparallel.thread.count="${{ github.event.inputs.threadcount || '1' }}" \
             -Dallure.results.directory=target/allure-results
+
+      - name: Restore Shared History into allure-results
+        if: always()
+        run: |
+          mkdir -p target/allure-results/history
+          if [ -d gh-pages/allure-history/shared/history ]; then
+            echo "✅ Shared history found — restoring after test run"
+            cp -r gh-pages/allure-history/shared/history/. target/allure-results/history/
+          else
+            echo "ℹ️  No shared history yet — first run"
+          fi
 
       # ─────────────────────────────────────────
       # 7️⃣  Debug — verify outputs
