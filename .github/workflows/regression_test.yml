@@ -129,14 +129,20 @@ jobs:
         if: steps.guard.outputs.proceed == 'true'
         id: run
         continue-on-error: true
+        env:
+          TAGS: ${{ github.event.inputs.tag || '@regression' }}
+          ENV: ${{ github.event.inputs.env || 'qa' }}
+          BROWSER: ${{ github.event.inputs.browser || 'chromium' }}
+          HEADLESS: ${{ github.event.inputs.headless || 'true' }}
+          THREADS: ${{ github.event.inputs.threadcount || '1' }}
         run: |
           xvfb-run --auto-servernum -- mvn clean test \
             -Dtestng.suite.file=testng-regression.xml \
-            -Dcucumber.filter.tags="${{ github.event.inputs.tag || '@regression' }}" \
-            -Denv="${{ github.event.inputs.env || 'qa' }}" \
-            -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
-            -Dheadless="${{ github.event.inputs.headless || 'true' }}" \
-            -Dparallel.thread.count="${{ github.event.inputs.threadcount || '1' }}" \
+            -Dcucumber.filter.tags="${TAGS}" \
+            -Denv="${ENV}" \
+            -Dbrowser="${BROWSER}" \
+            -Dheadless="${HEADLESS}" \
+            -Dparallel.thread.count="${THREADS}" \
             -Dallure.results.directory=target/allure-results
 
       - name: Restore Shared History into allure-results
@@ -173,13 +179,17 @@ jobs:
       # ─────────────────────────────────────────
       - name: Generate Defect Age Report
         if: steps.guard.outputs.proceed == 'true'
+        env:
+          ENV: ${{ github.event.inputs.env || 'qa' }}
+          BROWSER: ${{ github.event.inputs.browser || 'chromium' }}
+          HEADLESS: ${{ github.event.inputs.headless || 'true' }}
         run: |
           mvn exec:java \
             -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
             -Dexec.classpathScope=test \
-            -Denv="${{ github.event.inputs.env || 'qa' }}" \
-            -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
-            -Dheadless="${{ github.event.inputs.headless || 'true' }}"
+            -Denv="${ENV}" \
+            -Dbrowser="${BROWSER}" \
+            -Dheadless="${HEADLESS}"
           echo "====== defect-age-report.csv ======"
           cat target/defect-age-report.csv || echo "❌ not generated"
 
