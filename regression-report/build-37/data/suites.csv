@@ -1,4 +1,4 @@
 "DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
-"","37463","Test 3 Successful login with admin credentials","","2026-02-19","passed","2026-02-19","","User Authentication","Test 3 Successful login with admin credentials",""
-"","30923","Test 1 Successful login with admin credentials","","2026-02-19","failed","2026-02-19","","User Authentication","Test 1 Successful login with admin credentials",""
-"","6581","Test 2 Successful login with admin credentials","","2026-02-19","broken","2026-02-19","","User Authentication","Test 2 Successful login with admin credentials",""
+"","7227","Test 2 Successful login with admin credentials","","2026-02-19","broken","2026-02-19","","User Authentication","Test 2 Successful login with admin credentials",""
+"","26261","Test 3 Successful login with admin credentials","","2026-02-19","passed","2026-02-19","","User Authentication","Test 3 Successful login with admin credentials",""
+"","22342","Test 1 Successful login with admin credentials","","2026-02-19","failed","2026-02-19","","User Authentication","Test 1 Successful login with admin credentials",""

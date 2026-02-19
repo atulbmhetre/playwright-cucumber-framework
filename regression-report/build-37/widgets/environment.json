@@ -1,1 +1,1 @@
-[{"values":["qa"],"name":"Environment"},{"values":["chromium"],"name":"Browser"},{"values":["https://opensource-demo.orangehrmlive.com"],"name":"URL"},{"values":["true"],"name":"Headless"}]
+[{"values":["dev"],"name":"Environment"},{"values":["firefox"],"name":"Browser"},{"values":["https://opensource-demo.orangehrmlive.com"],"name":"URL"},{"values":["true"],"name":"Headless"}]
