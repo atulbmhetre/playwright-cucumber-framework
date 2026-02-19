@@ -75,7 +75,7 @@
       const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
       const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
       const allBuilds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])].sort((a,b) => {
-        const toNum = x => typeof x === "string" && x.startsWith("m") ? parseInt(x.slice(1)) : x * 1e14;
+        const toNum = x => typeof x === "string" && x.startsWith("m") ? parseInt(x.slice(1)) + 1e15 : x;
         return toNum(b) - toNum(a);
       }).slice(0,20);
       if (allBuilds.length === 0) {

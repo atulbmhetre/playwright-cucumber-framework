@@ -1,1 +1,0 @@
-[{"uid":"809d5b21ece7edec","name":"Invalid login using direct feature data","time":{"start":1771412215034,"stop":1771412234306,"duration":19272},"status":"passed","severity":"normal"},{"uid":"d4a53fc5f486f7ea","name":"Successful login with admin credentials","time":{"start":1771412215036,"stop":1771412241650,"duration":26614},"status":"passed","severity":"normal"}]
