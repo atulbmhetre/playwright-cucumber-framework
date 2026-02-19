@@ -76,13 +76,14 @@
       for (const build of found) {
         const smokeStatus = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
         const regressionStatus = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
+        const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
         const smokeBadge = smokeStatus === 'success'
           ? '<span class="badge pass">✅ PASSED</span>'
           : smokeStatus === 'failure'
           ? '<span class="badge fail">❌ FAILED</span>'
           : '<span class="badge pending">UNKNOWN</span>';
         const regressionBadge = regressionStatus === null
-          ? '<span class="na">Manual smoke — regression skipped</span>'
+          ? (triggerType === 'manual' ? '<span class="na">Manual smoke — regression skipped</span>' : '<span class="na">Smoke failed — regression skipped</span>')
           : regressionStatus === 'success'
           ? '<span class="badge pass">✅ PASSED</span>'
           : '<span class="badge fail">❌ FAILED</span>';
