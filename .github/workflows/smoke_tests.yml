@@ -180,7 +180,7 @@ jobs:
 
           # ── Write build metadata ──
           mkdir -p build-meta
-          echo "${{ steps.run.outcome }}" > build-meta/smoke-${BUILD}.txt
+          echo "${{ steps.run.outcome }}|$(date +%s)" > build-meta/smoke-${BUILD}.txt
           # Write marker if smoke was manually triggered
           if [ "${{ github.event_name }}" = "push" ]; then
             echo "push" > build-meta/smoke-trigger-${BUILD}.txt
@@ -271,18 +271,26 @@ jobs:
                 const regressionOnly = regressionResults.filter(n => n !== null && !smokeBuilds.includes(n));
                 const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
                 const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
-                const allBuilds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])].sort((a,b) => {
-                  const toNum = x => typeof x === "string" && x.startsWith("m") ? parseInt(x.slice(1)) - 0.5 : x;
-                  return toNum(b) - toNum(a);
-                }).slice(0,20);
+                const allBuildIds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])];
+                // Get timestamps for all builds to sort by actual execution time
+                const buildTimes = await Promise.all(allBuildIds.map(async id => {
+                  const smokeRaw2 = await safeFetch(`${repoUrl}/build-meta/smoke-${id}.txt`);
+                  const regRaw2 = await safeFetch(`${repoUrl}/build-meta/regression-${id}.txt`);
+                  const smokeTs = smokeRaw2 && smokeRaw2.includes('|') ? parseInt(smokeRaw2.split('|')[1]) : 0;
+                  const regTs = regRaw2 && regRaw2.includes('|') ? parseInt(regRaw2.split('|')[1]) : 0;
+                  return { id, ts: Math.max(smokeTs, regTs) };
+                }));
+                const allBuilds = buildTimes.sort((a,b) => b.ts - a.ts).slice(0,20).map(x => x.id);
                 if (allBuilds.length === 0) {
                   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
                   return;
                 }
                 tbody.innerHTML = "";
                 for (const build of allBuilds) {
-                  const smokeStatus = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
-                  const regressionStatus = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
+                  const smokeRaw = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
+                  const regressionRaw = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
+                  const smokeStatus = smokeRaw ? smokeRaw.split('|')[0] : null;
+                  const regressionStatus = regressionRaw ? regressionRaw.split('|')[0] : null;
                   const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
                   const smokeBadge = smokeStatus === null
                     ? '<span class="na">—</span>'

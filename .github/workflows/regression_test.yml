@@ -234,7 +234,7 @@ jobs:
 
           # ── Write build metadata ──
           mkdir -p build-meta
-          echo "${{ steps.run.outcome }}" > build-meta/regression-${BUILD}.txt
+          echo "${{ steps.run.outcome }}|$(date +%s)" > build-meta/regression-${BUILD}.txt
           # If manual run, append to manifest so index page can discover it
           if [[ "${BUILD}" == m* ]]; then
             echo "${BUILD}" >> build-meta/manual-regression-builds.txt
